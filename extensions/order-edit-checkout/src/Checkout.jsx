@@ -54,6 +54,12 @@ function Extension() {
       isAllow: true
     },
     {
+      name: 'Contact Customer Support',
+      icon: 'profile',
+      settings: 'contact_customer_support',
+      isAllow: true
+    },
+    {
       name: 'Change Product Quantities',
       icon: 'plus',
       settings: 'change_product_quantities',
@@ -91,7 +97,7 @@ function Extension() {
       isAllow: true
     },
     {
-      name: 'Cancel Order',
+      name: 'Request For Order Cancel',
       icon: 'close',
       settings: 'cancel_order',
       isAllow: true
