@@ -1,16 +1,11 @@
-{% unless template.name contains 'order-edit' %}
+{% unless template.name contains 'opt-order-edit' %}
 <link rel="stylesheet" href="{{ 'order-edit.css' | asset_url }}">
-  <script
-    defer
-    type="module"
-    src="https://order-edit-123.promisefix.com/assets/index-Bh0COTZf.js"
-  ></script>
+  <script defer type="module" src="{{ 'order-edit-portal.js' | asset_url }}"></script>
 {% endunless %}
-
-{% comment %} <script defer type="module" src="{{ 'order-edit-portal.js' | asset_url }}"></scrip> {% endcomment %}
+{% comment %} <script defer type="module" src="{{ 'order-edit-portal.js' | asset_url }}"></script> {% endcomment %}
 {% schema %}
 {
-  "name": "Optimarko order Edit",
+  "name": "Optimarko Order Edit",
   "target": "body"
 }
 {% endschema %}
