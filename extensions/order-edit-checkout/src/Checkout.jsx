@@ -25,7 +25,9 @@ import {
   ProductThumbnail,
   ChoiceList,
   Choice,
-  Link
+  Link,
+  Switch,
+  Checkbox
 } from '@shopify/ui-extensions-react/customer-account'
 import { useState } from 'react'
 import { countries, provinces } from './lib/countries'
@@ -40,8 +42,8 @@ function Extension() {
   const [openId, setOpenId] = useState([])
   const editOrderOption = [
     {
-      name: 'Shipping Address',
-      icon: 'geolocation',
+      name: 'Edit Shipping Address',
+      icon: 'delivery',
       settings: 'shipping_address',
       isAllow: true
     },
@@ -286,6 +288,9 @@ const ShippingAddress = ({ optionName }) => {
               error={formErrors.zip}
             />
           </InlineLayout>
+          <Checkbox id='checkbox' name='checkbox'>
+            Update your default address
+          </Checkbox>
 
           {/* Conditional Success and Error Banners */}
           {submitSuccess && (
@@ -346,6 +351,9 @@ const ContactInformation = ({ optionName }) => {
             error={formErrors.phone}
             required
           />
+          <Checkbox id='checkbox' name='checkbox'>
+            Update profile
+          </Checkbox>
           {/* Conditional Success and Error Banners */}
           {submitSuccess && (
             <Banner
