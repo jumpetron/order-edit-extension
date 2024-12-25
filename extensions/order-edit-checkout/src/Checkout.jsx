@@ -27,7 +27,12 @@ import {
   Choice,
   Link,
   Switch,
-  Checkbox
+  Checkbox,
+  Modal,
+  ToggleButtonGroup,
+  ToggleButton,
+  BlockLayout,
+  useApi
 } from '@shopify/ui-extensions-react/customer-account'
 import { useState } from 'react'
 import { countries, provinces } from './lib/countries'
@@ -38,7 +43,8 @@ export default reactExtension(
 )
 
 function Extension() {
-  const order = useOrder()
+  const data = useApi()
+  console.log(data.sessionToken)
   const [openId, setOpenId] = useState([])
   const editOrderOption = [
     {
@@ -126,6 +132,7 @@ function Extension() {
   const handleDisclosure = (open) => {
     setOpenId(open)
   }
+
   return (
     <View
       cornerRadius='large'
@@ -192,6 +199,9 @@ function Extension() {
               )}
               {option?.settings == 'switch_product' && (
                 <SwitchProduct optionName={option?.settings} />
+              )}
+              {option?.settings == 'contact_customer_support' && (
+                <ContactCustomerSupport optionName={option?.settings} />
               )}
             </Disclosure>
           ))}
@@ -377,6 +387,83 @@ const ContactInformation = ({ optionName }) => {
   )
 }
 
+const ContactCustomerSupport = ({ optionName }) => {
+  const [contactInformation, setContactInformation] = useState({
+    email: 'ahmedfoysal@gmail.com',
+    phone: '021597845523236'
+  })
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState(null)
+  const [submitSuccess, setSubmitSuccess] = useState(false)
+  const [buttonText, setButtonText] = useState('Send message')
+  const [formErrors, setFormErrors] = useState({})
+  const contactReason = [
+    {
+      value: '1',
+      label: 'I have a question about the product'
+    },
+    {
+      value: '2',
+      label: 'I want to change something about my order'
+    },
+    {
+      value: '3',
+      label: 'I want to cancel my order'
+    },
+    {
+      value: '4',
+      label: `I haven't received my order`
+    },
+    {
+      value: '5',
+      label: `There's problem with my order`
+    },
+    {
+      value: '6',
+      label: 'Other'
+    }
+  ]
+  return (
+    <View id={optionName} padding={['base', 'base', 'base', 'base']}>
+      <Form>
+        <BlockStack>
+          <Select label='Support Reason' value='1' options={contactReason} />
+          <TextField
+            value={contactInformation?.email}
+            label='Email'
+            name='email'
+            id='email'
+            onChange={(value) => handleInputChange('email', value)}
+            error={formErrors.email}
+            required
+          />
+          <TextField
+            value={contactInformation?.phone}
+            label='Phone Number'
+            name='phone'
+            onChange={(value) => handleInputChange('phone', value)}
+            id='phone'
+            error={formErrors.phone}
+            required
+          />
+          <TextField label='Write here' multiline='5' />
+          {/* Conditional Success and Error Banners */}
+          {submitSuccess && (
+            <Banner
+              status='success'
+              title='Your contact information has been successfully updated!'
+            />
+          )}
+          {submitError && <Banner status='warning' title={submitError} />}
+          <Button accessibilityRole='submit'>
+            {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
+          </Button>
+        </BlockStack>
+      </Form>
+    </View>
+  )
+}
+
 const ChangeProductQuantities = ({ optionName }) => {
   const [loadMore, setLoadMore] = useState(4)
   const [buttonText, setButtonText] = useState('Save')
@@ -385,7 +472,7 @@ const ChangeProductQuantities = ({ optionName }) => {
   const [success, setSuccess] = useState('')
 
   const handleViewMore = () => {
-    setLoadMore((prevCount) => prevCount + 4) // Show 4 more products on each click
+    setLoadMore((prevCount) => prevCount + 4)
   }
 
   const products = [
@@ -411,17 +498,22 @@ const ChangeProductQuantities = ({ optionName }) => {
             key={item.id}
             blockAlignment='center'
             spacing='base'
-            columns={['fill', '25%']}>
+            columns={['fill', '30%']}>
             <InlineLayout columns={['auto', 'fill']} spacing='base'>
               <ProductThumbnail size='base' source={item?.image} badge={'1'} />
               <BlockStack spacing='none'>
-                <Text size='base'>{item?.title}</Text>
+                <Text size='base' emphasis='bold'>
+                  {item?.title}
+                </Text>
                 <Text size='small'>{item?.variant?.title}</Text>
-                <Text size='small'>${item?.variant?.price}</Text>
+                <Text size='small'>Price: ${item?.variant?.price}</Text>
               </BlockStack>
             </InlineLayout>
 
-            <Stepper label='Quantity' value={'1'} min={0} max={10} />
+            <BlockStack inlineAlignment='end'>
+              <Stepper label='Quantity' value={1} min={1} />
+              <Link to='#'>Remove</Link>
+            </BlockStack>
           </InlineLayout>
         ))}
 
@@ -575,27 +667,61 @@ const ApplyDiscount = ({ optionName }) => {
 }
 
 const CancelOrder = ({ optionName }) => {
+  const [contactInformation, setContactInformation] = useState({
+    email: 'ahmedfoysal@gmail.com',
+    phone: '021597845523236'
+  })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [buttonText, setButtonText] = useState('Cancel Order')
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [submitError, setSubmitError] = useState(null)
-
+  const cancelReason = [
+    {
+      value: '1',
+      label: 'Found a better price elswhere'
+    },
+    {
+      value: '2',
+      label: 'Item is no longer needed'
+    },
+    {
+      value: '3',
+      label: 'Delivery costs are too expensive'
+    },
+    {
+      value: '4',
+      label: `The item was purchased by mistake`
+    },
+    {
+      value: '5',
+      label: `The order is taking too long to arrive`
+    },
+    {
+      value: '6',
+      label: 'Change mind about the product'
+    }
+  ]
   return (
     <View id={optionName} padding={['none', 'base', 'base', 'base']}>
       <BlockStack>
-        <InlineLayout
-          padding='base'
-          background='subdued'
-          spacing='base'
-          columns={['auto', 'fill']}
-          blockAlignment='center'>
-          <Icon source='info' />
-          <Text>
-            Canceling this order will stop its fulfillment process, and any
-            associated charges will be reversed as per our policy. Once
-            canceled, this action cannot be undone.
-          </Text>
-        </InlineLayout>
+        <Form>
+          <BlockStack>
+            <Select
+              label='Select cancel Reason'
+              value='1'
+              options={cancelReason}
+            />
+
+            <TextField
+              label='Why you want to cancel your order?'
+              multiline='5'
+            />
+            <Text size='small' appearance='subdued'>
+              You'll be contacted by the customer support team to confirm the
+              cancellation.
+            </Text>
+          </BlockStack>
+        </Form>
         <Button kind='primary'>
           {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
         </Button>
@@ -663,7 +789,7 @@ const ChangePaymentMethod = ({ optionName }) => {
   )
 }
 
-const EditGiftMessage = ({ optionName, orderData }) => {
+const EditGiftMessage = ({ optionName }) => {
   const [giftMessages, setGiftMessages] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
@@ -684,12 +810,12 @@ const EditGiftMessage = ({ optionName, orderData }) => {
               badge={'5'} // Display the quantity as a badge
             />
             <BlockStack spacing='none'>
-              <Text size='base'>{'Item Title'}</Text>
+              <Text size='base'>{'The Multi-managed Snowboard'}</Text>
               <Text size='small'>{'Variant Title'}</Text>
-              <Text size='small'>{`$`}</Text>
+              <Text size='small'>{`$200`}</Text>
             </BlockStack>
           </InlineStack>
-          <TextField label='Type your message' value={'Gift Message'} />
+          <TextField label='Type your message' />
         </InlineLayout>
 
         <Button kind='primary'>
@@ -718,17 +844,102 @@ const DownloadInvoice = ({ optionName }) => {
   const [success, setSuccess] = useState(false)
   const [invoiceUrl, setInvoiceUrl] = useState(null)
   const [buttonText, setButtonText] = useState('Generate Invoice')
+  const [isBusiness, setIsBusiness] = useState(false)
+  const [updateBilling, setUpdateBilling] = useState(false)
+
+  const handleBusinessChange = (value) => {
+    setIsBusiness(value)
+  }
+
+  const handleBillingChange = (value) => {
+    setUpdateBilling(value)
+  }
 
   return (
     <View id={optionName} padding={['base', 'base', 'base', 'base']}>
       <BlockStack>
+        {/* Address Section */}
+        <InlineLayout columns={['fill', 'fill']}>
+          <BlockStack spacing='tight'>
+            <Text appearance='subdued'>Shipping Address</Text>
+            <BlockStack spacing='0'>
+              <Text>Ahmed Faysal</Text>
+              <Text>Mirpur</Text>
+              <Text>Dhaka 1216, BD</Text>
+            </BlockStack>
+          </BlockStack>
+          <BlockStack spacing='tight'>
+            <Text appearance='subdued'>Billing Address</Text>
+            <BlockStack spacing='0'>
+              <Text>Ahmed Faysal</Text>
+              <Text>Mirpur</Text>
+              <Text>Dhaka 1216, BD</Text>
+            </BlockStack>
+          </BlockStack>
+        </InlineLayout>
+        <Text appearance='subdued'>Customize your invoice</Text>
+        {/* Business Options */}
+        <Checkbox
+          id='checkbox-business'
+          name='checkbox-business'
+          checked={isBusiness}
+          onChange={handleBusinessChange}
+          accessibilityLabel='Enable business purchase options'>
+          Purchasing as a business
+        </Checkbox>
+        {isBusiness && (
+          <BlockStack>
+            <TextField label='Company Name' />
+            <Select
+              required
+              label='Country/Region'
+              options={countries}
+              value='US'
+            />
+            <Select required label='Tax ID' options={countries} value='US' />
+            <TextField label='Tax Number' />
+          </BlockStack>
+        )}
+
+        {/* Billing Options */}
+        <Checkbox
+          id='checkbox-billing'
+          name='checkbox-billing'
+          checked={updateBilling}
+          onChange={handleBillingChange}
+          accessibilityLabel='Enable custom billing details'>
+          Update invoice billing details
+        </Checkbox>
+        {updateBilling && (
+          <BlockStack>
+            <Select
+              required
+              label='Country/Region'
+              options={countries}
+              value='US'
+            />
+            <TextField label='Address' />
+            <TextField label='Apartment, suite, etc. (Optional)' />
+            <Select required label='Provinces' value='AL' options={provinces} />
+            <InlineLayout columns={['fill', 'fill']} spacing='base'>
+              <TextField label='City' />
+              <TextField label='Postal Code' />
+            </InlineLayout>
+          </BlockStack>
+        )}
+
+        {/* Invoice Options */}
         <ChoiceList name='group-single' variant='group' value='ship'>
-          <Choice id='ship'>Download Invoice</Choice>
+          <Choice id='ship'>Send invoice by email</Choice>
+          <Choice id='email'>Download Invoice</Choice>
         </ChoiceList>
-        <Button kind='primary'>
+
+        {/* Generate Invoice Button */}
+        <Button kind='primary' disabled={isLoading}>
           {isLoading ? <Spinner appearance='subdued' /> : buttonText}
         </Button>
 
+        {/* Success/Error Messages */}
         {success && invoiceUrl && (
           <Banner status='success' title='Invoice generated successfully!' />
         )}
@@ -752,6 +963,9 @@ const AddAnotherProduct = ({ optionName }) => {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
   const [buttonText, setButtonText] = useState('Save')
+  const [selectedImageSource, setSelectedImageSource] = useState(
+    'https://cdn.shopify.com/s/files/1/0711/2173/1816/files/44694ee386818f3276566210464cf341.jpg?v=1731948240'
+  )
 
   const handleViewMore = () => {
     setLoadMore((prevCount) => prevCount + 4) // Show 4 more products on each click
@@ -770,6 +984,10 @@ const AddAnotherProduct = ({ optionName }) => {
   ]
 
   const productsToShow = products.slice(0, loadMore)
+
+  const handleImageChange = (newSource) => {
+    setSelectedImageSource(newSource) // Update the selected image source
+  }
   return (
     <View id={optionName} padding={['base', 'base', 'base', 'base']}>
       <BlockStack>
@@ -787,11 +1005,156 @@ const AddAnotherProduct = ({ optionName }) => {
                 <ProductThumbnail size='base' source={product?.image} />
                 <BlockStack spacing='none'>
                   <Text size='base'>{product?.title}</Text>
-                  <Text size='small'>{product?.variants?.title}</Text>
-                  <Text size='small'>'$234'</Text>
+                  <Text size='small'>{product?.variant?.title}</Text>
+                  <Text size='small'>Price: ${product?.variant?.price}</Text>
                 </BlockStack>
               </InlineStack>
-              <Button>'Add to cart'</Button>
+              <Button
+                overlay={
+                  <Modal padding size='large' id='my-modal'>
+                    <InlineLayout columns={['fill', 'fill']} spacing='base'>
+                      <BlockStack>
+                        <Image source={selectedImageSource} />
+                        <InlineLayout spacing='tight'>
+                          <Pressable
+                            onPress={() =>
+                              handleImageChange(
+                                'https://cdn.shopify.com/s/files/1/0711/2173/1816/files/44694ee386818f3276566210464cf341.jpg?v=1731948240'
+                              )
+                            }>
+                            <Image
+                              cornerRadius='base'
+                              border='base'
+                              source='https://cdn.shopify.com/s/files/1/0711/2173/1816/files/44694ee386818f3276566210464cf341.jpg?v=1731948240'
+                            />
+                          </Pressable>
+                          <Pressable
+                            onPress={() =>
+                              handleImageChange(
+                                'https://shopninja-optimarko.myshopify.com/cdn/shop/files/6eb0aa9fdb271e5954b2f0d09a0640e4.jpg?v=1731948241&width=823'
+                              )
+                            }>
+                            <Image
+                              cornerRadius='base'
+                              border='base'
+                              source='https://shopninja-optimarko.myshopify.com/cdn/shop/files/6eb0aa9fdb271e5954b2f0d09a0640e4.jpg?v=1731948241&width=823'
+                            />
+                          </Pressable>
+                          <Pressable
+                            onPress={() =>
+                              handleImageChange(
+                                'https://shopninja-optimarko.myshopify.com/cdn/shop/files/015219de8a5be46a3b0a7b9089112d74.jpg?v=1731948241&width=823'
+                              )
+                            }>
+                            <Image
+                              cornerRadius='base'
+                              border='base'
+                              source='https://shopninja-optimarko.myshopify.com/cdn/shop/files/015219de8a5be46a3b0a7b9089112d74.jpg?v=1731948241&width=823'
+                            />
+                          </Pressable>
+                          <Pressable
+                            onPress={() =>
+                              handleImageChange(
+                                'https://shopninja-optimarko.myshopify.com/cdn/shop/files/e8490702c423e6c62d356cace500822f.jpg?v=1731948241&width=823'
+                              )
+                            }>
+                            <Image
+                              cornerRadius='base'
+                              border='base'
+                              source='https://shopninja-optimarko.myshopify.com/cdn/shop/files/e8490702c423e6c62d356cace500822f.jpg?v=1731948241&width=823'
+                            />
+                          </Pressable>
+                        </InlineLayout>
+                      </BlockStack>
+
+                      <BlockStack>
+                        <BlockStack spacing='base'>
+                          <Heading level='1'>
+                            Selling Plans Ski Wax Selling Plans Ski Wax Selling
+                            Plans Ski Wax
+                          </Heading>
+                          <InlineStack>
+                            <Text size='medium' accessibilityRole='deletion'>
+                              $9.95
+                            </Text>
+                            <Text size='medium' appearance='critical'>
+                              $8.96
+                            </Text>
+                          </InlineStack>
+                          <BlockStack spacing='0'>
+                            <Text>Size</Text>
+                            <Select
+                              label='Select size'
+                              value='2'
+                              options={[
+                                {
+                                  value: '1',
+                                  label: '1'
+                                },
+                                {
+                                  value: '2',
+                                  label: '2'
+                                },
+                                {
+                                  value: '3',
+                                  label: '3'
+                                },
+                                {
+                                  value: '4',
+                                  label: '4'
+                                },
+                                {
+                                  value: '5',
+                                  label: '5'
+                                },
+                                {
+                                  value: '6',
+                                  label: '6'
+                                }
+                              ]}
+                            />
+                          </BlockStack>
+                          <BlockStack spacing='0'>
+                            <Text>Color</Text>
+                            <Select
+                              label='Select Color'
+                              value='2'
+                              options={[
+                                {
+                                  value: '1',
+                                  label: 'Black'
+                                },
+                                {
+                                  value: '2',
+                                  label: 'Red'
+                                },
+                                {
+                                  value: '3',
+                                  label: 'Yellow'
+                                },
+                                {
+                                  value: '4',
+                                  label: 'Purple'
+                                }
+                              ]}
+                            />
+                          </BlockStack>
+                        </BlockStack>
+                        <BlockStack>
+                          <Stepper label='Quantity' value={1} />
+                          <Button
+                            onPress={() => {
+                              console.log('onPress event')
+                            }}>
+                            Add to cart
+                          </Button>
+                        </BlockStack>
+                      </BlockStack>
+                    </InlineLayout>
+                  </Modal>
+                }>
+                View
+              </Button>
             </InlineLayout>
           ))}
         </BlockStack>
@@ -875,11 +1238,14 @@ const ChangeProductSizeAndVariant = ({ optionName }) => {
   )
 }
 
-// Switch Product Start
-const SwitchProduct = ({ orderEditSettings, optionName, orderData }) => {
+const SwitchProduct = ({ optionName }) => {
+  const [loadMore, setLoadMore] = useState(4)
   const [selectedProducts, setSelectedProducts] = useState([])
-  const [selectedReplacements, setSelectedReplacements] = useState([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitSuccess, setSubmitSuccess] = useState(false)
+  const [submitError, setSubmitError] = useState(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [selectedReplacements, setSelectedReplacements] = useState([])
   const [buttonText, setButtonText] = useState('Save')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -897,95 +1263,100 @@ const SwitchProduct = ({ orderEditSettings, optionName, orderData }) => {
       }
     }
   ]
-  const [type, setType] = useState([])
-  const switchProductStep = [
-    {
-      id: '1',
-      name: 'Select the Product to switch',
-      type: 'replace_product'
-    },
-    {
-      id: '2',
-      name: 'Pick a Product',
-      type: 'pick_product'
-    }
-  ]
-
-  const [loadMore, setLoadMore] = useState(4)
 
   const handleViewMore = () => {
-    setLoadMore((prevCount) => prevCount + 4) // Show 4 more products on each click
+    setLoadMore((prevCount) => prevCount + 4)
   }
-
+  const [hoveredProductId, setHoveredProductId] = useState(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const productsToShow = products.slice(0, loadMore)
-  // Function to handle selecting or deselecting a product to switch
-  const handleProductSelect = (product) => {
-    console.log('Product Select')
-  }
 
-  // Function to handle selecting or deselecting a replacement product
-  const handleReplacementSelect = (variant) => {
-    console.log('Select replacement product')
-  }
   return (
     <View id={optionName} padding={['base', 'base', 'base', 'base']}>
       <BlockStack>
-        {switchProductStep?.map((step) => (
-          <Disclosure
-            defaultOpen
-            key={step.id}
-            onToggle={(open) => setType(open)}>
-            <Pressable toggles={step.type}>
-              <InlineLayout
-                blockAlignment='center'
-                spacing='base'
-                columns={['fill', 'auto']}>
-                <InlineStack>
-                  <Icon source={'categories'} appearance='monochrome' />
-                  <Heading level={'3'} appearance='info'>
-                    {step?.name}
-                  </Heading>
-                </InlineStack>
-                <Icon
-                  source={type.includes(step.type) ? 'minus' : 'plus'}
-                  appearance='monochrome'
-                />
-              </InlineLayout>
-            </Pressable>
-            {step?.type === 'replace_product' && (
-              <SelectToSwitch
-                type={step?.type}
-                handleProductSelect={handleProductSelect}
-                products={products}
-                selectedProducts={selectedProducts}
-                currencyCode={'$'}
-              />
-            )}
-            {step?.type === 'pick_product' && (
-              <BlockStack>
-                {productsToShow?.map((item) => (
-                  <PickProduct
-                    key={item?.id}
-                    type={step?.type}
-                    products={products}
-                    handleReplacementSelect={handleReplacementSelect}
-                    item={item}
-                    selectedReplacements={selectedReplacements}
-                    currencyCode={'$'}
-                  />
-                ))}
-                <BlockStack>
-                  {loadMore < products.length && (
-                    <Link onPress={handleViewMore}>View more products</Link>
-                  )}
+        <BlockStack spacing='loose'>
+          <TextField label='Search product' icon={{ source: 'magnify' }} />
+
+          {productsToShow.map((product) => (
+            <InlineLayout
+              key={product?.id}
+              blockAlignment='center'
+              spacing='base'
+              columns={['fill', 'auto']}>
+              <InlineStack spacing='extraTight'>
+                <ProductThumbnail size='base' source={product?.image} />
+                <BlockStack spacing='none'>
+                  <Text size='base'>{product?.title}</Text>
+                  <Text size='small'>{product?.variant?.title}</Text>
+                  <Text size='small'>Price: ${product?.variant?.price}</Text>
                 </BlockStack>
-              </BlockStack>
-            )}
-          </Disclosure>
-        ))}
-        <Button kind='primary'>
-          {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
-        </Button>
+              </InlineStack>
+              <Button
+                overlay={
+                  <Modal
+                    padding
+                    size='large'
+                    id='my-modal'
+                    title='Select a replacement product'>
+                    <BlockStack>
+                      <TextField
+                        label='Search for product'
+                        icon={{ source: 'magnify' }}
+                      />
+                      <BlockStack>
+                        <Pressable
+                          onPointerEnter={() => setHoveredProductId(product.id)}
+                          onPointerLeave={() => setHoveredProductId(null)}
+                          background={
+                            hoveredProductId === product.id
+                              ? 'subdued'
+                              : 'transparent'
+                          }
+                          cornerRadius='base'>
+                          <InlineLayout
+                            columns={['fill', '30%']}
+                            spacing='base'
+                            padding='base'>
+                            <InlineStack
+                              blockAlignment='center'
+                              spacing='extraTight'>
+                              <ProductThumbnail
+                                size='base'
+                                source={product?.image}
+                              />
+                              <BlockStack spacing='none'>
+                                <Text size='base'>{product?.title}</Text>
+                                <Text size='small'>
+                                  {product?.variant?.title}
+                                </Text>
+                                <Text size='small'>
+                                  Price: ${product?.variant?.price}
+                                </Text>
+                              </BlockStack>
+                            </InlineStack>
+                            <ToggleButtonGroup>
+                              <InlineLayout>
+                                <ToggleButton id='222'>
+                                  <View inlineAlignment='center'>
+                                    Select Product
+                                  </View>
+                                </ToggleButton>
+                              </InlineLayout>
+                            </ToggleButtonGroup>
+                          </InlineLayout>
+                        </Pressable>
+                      </BlockStack>
+                    </BlockStack>
+                  </Modal>
+                }>
+                Replace
+              </Button>
+            </InlineLayout>
+          ))}
+        </BlockStack>
+
+        <Link onPress={handleViewMore}>View more products</Link>
+
         {success && (
           <Banner status='success' onDismiss={() => setSuccess('')}>
             {success}
@@ -998,83 +1369,5 @@ const SwitchProduct = ({ orderEditSettings, optionName, orderData }) => {
         )}
       </BlockStack>
     </View>
-  )
-}
-
-const SelectToSwitch = ({
-  type,
-  handleProductSelect,
-  products,
-  currencyCode
-}) => {
-  const [loadMore, setLoadMore] = useState(4)
-
-  const handleViewMore = () => {
-    setLoadMore((prevCount) => prevCount + 4) // Show 4 more products on each click
-  }
-
-  const productsToShow = products.slice(0, loadMore)
-
-  return (
-    <BlockStack>
-      {productsToShow?.map((item) => (
-        <InlineLayout
-          key={item.id}
-          padding={['base', 'none', 'base', 'none']}
-          id={type}
-          blockAlignment='center'
-          spacing='base'
-          columns={['fill', '25%']}>
-          <InlineStack blockAlignment='center' spacing={'extraTight'}>
-            <ProductThumbnail
-              size='base'
-              source={item?.product?.featuredMedia?.preview?.image?.url}
-              badge={item?.quantity}
-            />
-            <BlockStack spacing={'none'}>
-              <Text size='base'>{item?.title}</Text>
-              <Text size='small'>{item?.variant?.title}</Text>
-              <Text size='small'>
-                {currencyCode + ' ' + item?.variant?.price}
-              </Text>
-            </BlockStack>
-          </InlineStack>
-
-          <Button kind='primary'>'Select'</Button>
-        </InlineLayout>
-      ))}
-
-      <BlockStack display={type === 'replace_product' ? 'auto' : 'none'}>
-        {loadMore < products.length && (
-          <Link onPress={handleViewMore}>View more products</Link>
-        )}
-      </BlockStack>
-    </BlockStack>
-  )
-}
-
-const PickProduct = ({ type, item }) => {
-  return (
-    <BlockStack>
-      <BlockStack padding={['base', 'none', 'base', 'none']} id={type}>
-        <InlineStack blockAlignment='center' spacing={'extraTight'}>
-          <ProductThumbnail
-            size='base'
-            source={item?.image}
-            badge={item?.quantity}
-          />
-          <BlockStack spacing={'none'}>
-            <Text size='base'>{item?.title}</Text>
-            <Text size='small'>{item?.variants?.title}</Text>
-          </BlockStack>
-        </InlineStack>
-        <InlineLayout
-          columns={['fill', 'fill']}
-          blockAlignment='center'
-          spacing='base'>
-          <Button kind='primary'>'Added'</Button>
-        </InlineLayout>
-      </BlockStack>
-    </BlockStack>
   )
 }
