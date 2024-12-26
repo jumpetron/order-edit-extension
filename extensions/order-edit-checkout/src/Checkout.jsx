@@ -32,7 +32,8 @@ import {
   ToggleButtonGroup,
   ToggleButton,
   BlockLayout,
-  useApi
+  useApi,
+  ScrollView
 } from '@shopify/ui-extensions-react/customer-account'
 import { useState } from 'react'
 import { countries, provinces } from './lib/countries'
@@ -43,8 +44,6 @@ export default reactExtension(
 )
 
 function Extension() {
-  const data = useApi()
-  console.log(data.sessionToken)
   const [openId, setOpenId] = useState([])
   const editOrderOption = [
     {
@@ -1249,10 +1248,68 @@ const SwitchProduct = ({ optionName }) => {
   const [buttonText, setButtonText] = useState('Save')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [selectedImageSource, setSelectedImageSource] = useState(
+    'https://cdn.shopify.com/s/files/1/0711/2173/1816/files/44694ee386818f3276566210464cf341.jpg?v=1731948240'
+  )
 
   const products = [
     {
       id: '123',
+      image:
+        'https://cdn.shopify.com/s/files/1/0711/0249/6991/files/Main_0a40b01b-5021-48c1-80d1-aa8ab4876d3d.jpg?v=1720981400',
+      title: 'The Collection Snowboard: Hydrogen',
+      quantity: '1',
+      variant: {
+        title: 'medium / black / large',
+        price: '200'
+      }
+    },
+    {
+      id: '124',
+      image:
+        'https://cdn.shopify.com/s/files/1/0711/0249/6991/files/Main_0a40b01b-5021-48c1-80d1-aa8ab4876d3d.jpg?v=1720981400',
+      title: 'The Collection Snowboard: Hydrogen',
+      quantity: '1',
+      variant: {
+        title: 'medium / black / large',
+        price: '200'
+      }
+    },
+    {
+      id: '125',
+      image:
+        'https://cdn.shopify.com/s/files/1/0711/0249/6991/files/Main_0a40b01b-5021-48c1-80d1-aa8ab4876d3d.jpg?v=1720981400',
+      title: 'The Collection Snowboard: Hydrogen',
+      quantity: '1',
+      variant: {
+        title: 'medium / black / large',
+        price: '200'
+      }
+    },
+    {
+      id: '126',
+      image:
+        'https://cdn.shopify.com/s/files/1/0711/0249/6991/files/Main_0a40b01b-5021-48c1-80d1-aa8ab4876d3d.jpg?v=1720981400',
+      title: 'The Collection Snowboard: Hydrogen',
+      quantity: '1',
+      variant: {
+        title: 'medium / black / large',
+        price: '200'
+      }
+    },
+    {
+      id: '127',
+      image:
+        'https://cdn.shopify.com/s/files/1/0711/0249/6991/files/Main_0a40b01b-5021-48c1-80d1-aa8ab4876d3d.jpg?v=1720981400',
+      title: 'The Collection Snowboard: Hydrogen',
+      quantity: '1',
+      variant: {
+        title: 'medium / black / large',
+        price: '200'
+      }
+    },
+    {
+      id: '128',
       image:
         'https://cdn.shopify.com/s/files/1/0711/0249/6991/files/Main_0a40b01b-5021-48c1-80d1-aa8ab4876d3d.jpg?v=1720981400',
       title: 'The Collection Snowboard: Hydrogen',
@@ -1270,7 +1327,18 @@ const SwitchProduct = ({ optionName }) => {
   const [hoveredProductId, setHoveredProductId] = useState(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const productsToShow = products.slice(0, loadMore)
+  const [isProductSelect, setIsProductSelect] = useState(false)
+  const handleImageChange = (newSource) => {
+    setSelectedImageSource(newSource) // Update the selected image source
+  }
 
+  const handleSinlgeProductClick = () => {
+    setIsProductSelect(true)
+  }
+
+  const handleBack = () => {
+    setIsProductSelect(false)
+  }
   return (
     <View id={optionName} padding={['base', 'base', 'base', 'base']}>
       <BlockStack>
@@ -1298,55 +1366,226 @@ const SwitchProduct = ({ optionName }) => {
                     size='large'
                     id='my-modal'
                     title='Select a replacement product'>
-                    <BlockStack>
-                      <TextField
-                        label='Search for product'
-                        icon={{ source: 'magnify' }}
-                      />
-                      <BlockStack>
-                        <Pressable
-                          onPointerEnter={() => setHoveredProductId(product.id)}
-                          onPointerLeave={() => setHoveredProductId(null)}
-                          background={
-                            hoveredProductId === product.id
-                              ? 'subdued'
-                              : 'transparent'
-                          }
-                          cornerRadius='base'>
-                          <InlineLayout
-                            columns={['fill', '30%']}
-                            spacing='base'
-                            padding='base'>
-                            <InlineStack
-                              blockAlignment='center'
-                              spacing='extraTight'>
-                              <ProductThumbnail
-                                size='base'
-                                source={product?.image}
+                    {isProductSelect ? (
+                      <InlineLayout columns={['fill', 'fill']} spacing='base'>
+                        <BlockStack>
+                          <Image source={selectedImageSource} />
+                          <InlineLayout spacing='tight'>
+                            <Pressable
+                              onPress={() =>
+                                handleImageChange(
+                                  'https://cdn.shopify.com/s/files/1/0711/2173/1816/files/44694ee386818f3276566210464cf341.jpg?v=1731948240'
+                                )
+                              }>
+                              <Image
+                                cornerRadius='base'
+                                border='base'
+                                source='https://cdn.shopify.com/s/files/1/0711/2173/1816/files/44694ee386818f3276566210464cf341.jpg?v=1731948240'
                               />
-                              <BlockStack spacing='none'>
-                                <Text size='base'>{product?.title}</Text>
-                                <Text size='small'>
-                                  {product?.variant?.title}
-                                </Text>
-                                <Text size='small'>
-                                  Price: ${product?.variant?.price}
-                                </Text>
-                              </BlockStack>
-                            </InlineStack>
-                            <ToggleButtonGroup>
-                              <InlineLayout>
-                                <ToggleButton id='222'>
-                                  <View inlineAlignment='center'>
-                                    Select Product
-                                  </View>
-                                </ToggleButton>
-                              </InlineLayout>
-                            </ToggleButtonGroup>
+                            </Pressable>
+                            <Pressable
+                              onPress={() =>
+                                handleImageChange(
+                                  'https://shopninja-optimarko.myshopify.com/cdn/shop/files/6eb0aa9fdb271e5954b2f0d09a0640e4.jpg?v=1731948241&width=823'
+                                )
+                              }>
+                              <Image
+                                cornerRadius='base'
+                                border='base'
+                                source='https://shopninja-optimarko.myshopify.com/cdn/shop/files/6eb0aa9fdb271e5954b2f0d09a0640e4.jpg?v=1731948241&width=823'
+                              />
+                            </Pressable>
+                            <Pressable
+                              onPress={() =>
+                                handleImageChange(
+                                  'https://shopninja-optimarko.myshopify.com/cdn/shop/files/015219de8a5be46a3b0a7b9089112d74.jpg?v=1731948241&width=823'
+                                )
+                              }>
+                              <Image
+                                cornerRadius='base'
+                                border='base'
+                                source='https://shopninja-optimarko.myshopify.com/cdn/shop/files/015219de8a5be46a3b0a7b9089112d74.jpg?v=1731948241&width=823'
+                              />
+                            </Pressable>
+                            <Pressable
+                              onPress={() =>
+                                handleImageChange(
+                                  'https://shopninja-optimarko.myshopify.com/cdn/shop/files/e8490702c423e6c62d356cace500822f.jpg?v=1731948241&width=823'
+                                )
+                              }>
+                              <Image
+                                cornerRadius='base'
+                                border='base'
+                                source='https://shopninja-optimarko.myshopify.com/cdn/shop/files/e8490702c423e6c62d356cace500822f.jpg?v=1731948241&width=823'
+                              />
+                            </Pressable>
                           </InlineLayout>
-                        </Pressable>
+                        </BlockStack>
+
+                        <BlockStack>
+                          <BlockStack spacing='base'>
+                            <Heading level='1'>
+                              Selling Plans Ski Wax Selling Plans Ski Wax
+                              Selling Plans Ski Wax
+                            </Heading>
+                            <InlineStack>
+                              <Text size='medium' accessibilityRole='deletion'>
+                                $9.95
+                              </Text>
+                              <Text size='medium' appearance='critical'>
+                                $8.96
+                              </Text>
+                            </InlineStack>
+                            <BlockStack spacing='0'>
+                              <Text>Size</Text>
+                              <Select
+                                label='Select size'
+                                value='2'
+                                options={[
+                                  {
+                                    value: '1',
+                                    label: '1'
+                                  },
+                                  {
+                                    value: '2',
+                                    label: '2'
+                                  },
+                                  {
+                                    value: '3',
+                                    label: '3'
+                                  },
+                                  {
+                                    value: '4',
+                                    label: '4'
+                                  },
+                                  {
+                                    value: '5',
+                                    label: '5'
+                                  },
+                                  {
+                                    value: '6',
+                                    label: '6'
+                                  }
+                                ]}
+                              />
+                            </BlockStack>
+                            <BlockStack spacing='0'>
+                              <Text>Color</Text>
+                              <Select
+                                label='Select Color'
+                                value='2'
+                                options={[
+                                  {
+                                    value: '1',
+                                    label: 'Black'
+                                  },
+                                  {
+                                    value: '2',
+                                    label: 'Red'
+                                  },
+                                  {
+                                    value: '3',
+                                    label: 'Yellow'
+                                  },
+                                  {
+                                    value: '4',
+                                    label: 'Purple'
+                                  }
+                                ]}
+                              />
+                            </BlockStack>
+                          </BlockStack>
+                          <BlockStack>
+                            <Stepper label='Quantity' value={1} />
+                            <Button
+                              onPress={() => {
+                                console.log('onPress event')
+                              }}>
+                              Add to cart
+                            </Button>
+                            <Button onPress={handleBack}>Back</Button>
+                          </BlockStack>
+                        </BlockStack>
+                      </InlineLayout>
+                    ) : (
+                      <BlockStack>
+                        {/* Scrollable Content */}
+                        <BlockStack>
+                          <TextField
+                            label='Search for product'
+                            icon={{ source: 'magnify' }}
+                          />
+                          <ScrollView maxBlockSize={400}>
+                            <BlockStack overflow='hidden' padding='tight'>
+                              {products.map((product) => (
+                                <Pressable
+                                  onPress={handleSinlgeProductClick}
+                                  key={product.id}
+                                  onPointerEnter={() =>
+                                    setHoveredProductId(product.id)
+                                  }
+                                  onPointerLeave={() =>
+                                    setHoveredProductId(null)
+                                  }
+                                  background={
+                                    hoveredProductId === product.id
+                                      ? 'subdued'
+                                      : 'transparent'
+                                  }
+                                  cornerRadius='base'>
+                                  <InlineLayout
+                                    columns={['fill', '30%']}
+                                    spacing='base'
+                                    padding='base'>
+                                    <InlineStack
+                                      blockAlignment='center'
+                                      spacing='extraTight'>
+                                      <ProductThumbnail
+                                        size='base'
+                                        source={product?.image}
+                                      />
+                                      <BlockStack spacing='none'>
+                                        <Text size='base'>
+                                          {product?.title}
+                                        </Text>
+                                        <Text size='small'>
+                                          {product?.variant?.title}
+                                        </Text>
+                                        <Text size='small'>
+                                          Price: ${product?.variant?.price}
+                                        </Text>
+                                      </BlockStack>
+                                    </InlineStack>
+
+                                    <ToggleButtonGroup>
+                                      <InlineLayout>
+                                        <ToggleButton id='222'>
+                                          <View inlineAlignment='center'>
+                                            View
+                                          </View>
+                                        </ToggleButton>
+                                      </InlineLayout>
+                                    </ToggleButtonGroup>
+                                  </InlineLayout>
+                                </Pressable>
+                              ))}
+                            </BlockStack>
+                          </ScrollView>
+                        </BlockStack>
+
+                        {/* Sticky Footer */}
+
+                        <InlineLayout
+                          blockAlignment='baseline'
+                          columns={['fill', 'auto']}>
+                          <Text>Selected: 1</Text>
+                          <InlineStack spacing='base'>
+                            <Button kind='primary'>Back</Button>
+                            <Button kind='secondary'>Done</Button>
+                          </InlineStack>
+                        </InlineLayout>
                       </BlockStack>
-                    </BlockStack>
+                    )}
                   </Modal>
                 }>
                 Replace
