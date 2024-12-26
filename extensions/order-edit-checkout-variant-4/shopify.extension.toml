@@ -6,10 +6,9 @@
 api_version = "2024-10"
 
 [[extensions]]
-name = "Checkout Variant 2"
-handle = "order-edit-checkout-variant-2"
+name = "Product Quantity"
+handle = "order-edit-checkout-variant-4"
 type = "ui_extension"
-default_placement = "ORDER_STATUS1"
 
 
 # Controls where in Shopify your extension will be injected,
@@ -18,7 +17,7 @@ default_placement = "ORDER_STATUS1"
 
 [[extensions.targeting]]
 module = "./src/Checkout.jsx"
-target = "customer-account.order-status.block.render"
+target = "customer-account.order-status.cart-line-item.render-after"
 
 [extensions.capabilities]
 # Gives your extension access to directly query Shopify’s storefront API.

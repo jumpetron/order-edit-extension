@@ -71,9 +71,9 @@ function Extension() {
       isAllow: true
     },
     {
-      name: 'Change Size or Variant',
+      name: 'Change Product Variant',
       icon: 'return',
-      settings: 'change_size_or_variant',
+      settings: 'change_product_variant',
       isAllow: true
     },
     {
@@ -193,7 +193,7 @@ function Extension() {
               {option?.settings == 'add_another_product' && (
                 <AddAnotherProduct optionName={option?.settings} />
               )}
-              {option?.settings == 'change_size_or_variant' && (
+              {option?.settings == 'change_product_variant' && (
                 <ChangeProductSizeAndVariant optionName={option?.settings} />
               )}
               {option?.settings == 'switch_product' && (
