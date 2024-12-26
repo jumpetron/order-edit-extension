@@ -979,6 +979,27 @@ const AddAnotherProduct = ({ optionName }) => {
         title: 'medium / black / large',
         price: '200'
       }
+    },
+    {
+      id: '124',
+      image:
+        'https://cdn.shopify.com/s/files/1/0711/0249/6991/files/Main_0a40b01b-5021-48c1-80d1-aa8ab4876d3d.jpg?v=1720981400',
+      title: 'The Collection Snowboard: Hydrogen',
+      variant: {
+        title: 'medium / black / large',
+        price: '200'
+      }
+    },
+    {
+      id: '125',
+      image:
+        'https://cdn.shopify.com/s/files/1/0711/0249/6991/files/Main_0a40b01b-5021-48c1-80d1-aa8ab4876d3d.jpg?v=1720981400',
+      title: 'The Collection Snowboard: Hydrogen',
+      variant: {
+        title: 'medium / black / large',
+        price: '200',
+        discountPrice: '150'
+      }
     }
   ]
 
@@ -998,14 +1019,33 @@ const AddAnotherProduct = ({ optionName }) => {
             <InlineLayout
               key={product?.id}
               blockAlignment='center'
-              spacing='base'
+              spacing='extraTight'
               columns={['fill', 'auto']}>
               <InlineStack blockAlignment='center' spacing='extraTight'>
                 <ProductThumbnail size='base' source={product?.image} />
-                <BlockStack spacing='none'>
-                  <Text size='base'>{product?.title}</Text>
-                  <Text size='small'>{product?.variant?.title}</Text>
-                  <Text size='small'>Price: ${product?.variant?.price}</Text>
+                <BlockStack spacing='extraTight'>
+                  <Heading level='3'>{product?.title}</Heading>
+                  <InlineStack>
+                    <Text
+                      appearance='subdued'
+                      size='base'
+                      accessibilityRole={
+                        product?.variant?.discountPrice ? 'deletion' : undefined
+                      }>
+                      ${product?.variant?.price}{' '}
+                    </Text>
+                    {product?.variant?.discountPrice && (
+                      <Text size='base' appearance='critical'>
+                        ${product?.variant?.discountPrice}
+                      </Text>
+                    )}
+                  </InlineStack>
+                  <InlineStack spacing='extraTight'>
+                    <Icon source='discount' appearance='success' />
+                    <Text appearance='success' emphasis='bold'>
+                      Save 10%
+                    </Text>
+                  </InlineStack>
                 </BlockStack>
               </InlineStack>
               <Button
@@ -1215,6 +1255,36 @@ const ChangeProductSizeAndVariant = ({ optionName }) => {
                 <Text size='small'>${item?.variant?.price}</Text>
               </BlockStack>
             </InlineLayout>
+            <Select
+              label='Size/Variant'
+              value='2'
+              options={[
+                {
+                  value: '1',
+                  label: 'Medium/Black'
+                },
+                {
+                  value: '2',
+                  label: 'Medium/Black'
+                },
+                {
+                  value: '3',
+                  label: 'Medium/Black'
+                },
+                {
+                  value: '4',
+                  label: 'Medium/Black'
+                },
+                {
+                  value: '5',
+                  label: 'Medium/Black'
+                },
+                {
+                  value: '6',
+                  label: 'Medium/Black'
+                }
+              ]}
+            />
           </InlineLayout>
         ))}
 
