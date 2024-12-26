@@ -9,7 +9,7 @@ api_version = "2024-10"
 name = "Product Variant"
 handle = "order-edit-checkout-variant-3"
 type = "ui_extension"
-
+default_placement = "ORDER_STATUS1"
 
 # Controls where in Shopify your extension will be injected,
 # and the file that contains your extension’s source code. Learn more:
