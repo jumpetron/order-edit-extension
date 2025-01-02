@@ -672,7 +672,7 @@ const CancelOrder = ({ optionName, defaultData, isLoading }) => {
       value: item.title,
       label: item.title
     })) || []
-
+  console.log(defaultData?.data?.cancel_reason_list)
   return (
     <View id={optionName} padding={['none', 'base', 'base', 'base']}>
       <BlockStack>
@@ -834,102 +834,131 @@ const DownloadInvoice = ({ optionName, defaultData, isLoading }) => {
   const handleBillingChange = (value) => {
     setUpdateBilling(value)
   }
-  console.log(defaultData)
+  console.log(defaultData?.data)
   return (
     <View id={optionName} padding={['base', 'base', 'base', 'base']}>
-      <BlockStack>
-        {/* Address Section */}
-        <InlineLayout columns={['fill', 'fill']}>
-          <BlockStack spacing='tight'>
-            <Text appearance='subdued'>Shipping Address</Text>
-            <BlockStack spacing='0'>
-              <Text>Ahmed Faysal</Text>
-              <Text>Mirpur</Text>
-              <Text>Dhaka 1216, BD</Text>
+      {isLoading ? (
+        <BlockStack spacing={'base'}>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <SkeletonTextBlock key={i} size='extraLarge' />
+          ))}
+        </BlockStack>
+      ) : (
+        <BlockStack>
+          {/* Address Section */}
+          <InlineLayout columns={['fill', 'fill']}>
+            <BlockStack spacing='tight'>
+              <Text appearance='subdued'>Shipping Address</Text>
+              <BlockStack spacing='0'>
+                <Text>{defaultData?.data?.shipping_address?.name}</Text>
+                <Text>
+                  {defaultData?.data?.shipping_address?.address1},{' '}
+                  {defaultData?.data?.shipping_address?.address2 &&
+                    defaultData?.data?.shipping_address?.address2}
+                </Text>
+                <Text>
+                  {defaultData?.data?.shipping_address?.city}{' '}
+                  {defaultData?.data?.shipping_address?.zip},{' '}
+                  {defaultData?.data?.shipping_address?.countryCodeV2}
+                </Text>
+              </BlockStack>
             </BlockStack>
-          </BlockStack>
-          <BlockStack spacing='tight'>
-            <Text appearance='subdued'>Billing Address</Text>
-            <BlockStack spacing='0'>
-              <Text>Ahmed Faysal</Text>
-              <Text>Mirpur</Text>
-              <Text>Dhaka 1216, BD</Text>
+            <BlockStack spacing='tight'>
+              <Text appearance='subdued'>Billing Address</Text>
+              <BlockStack spacing='0'>
+                <Text>{defaultData?.data?.billing_address?.name}</Text>
+                <Text>
+                  {defaultData?.data?.billing_address?.address1},{' '}
+                  {defaultData?.data?.billing_address?.address2 &&
+                    defaultData?.data?.billing_address?.address2}
+                </Text>
+                <Text>
+                  {defaultData?.data?.billing_address?.city}{' '}
+                  {defaultData?.data?.billing_address?.zip},{' '}
+                  {defaultData?.data?.billing_address?.countryCodeV2}
+                </Text>
+              </BlockStack>
             </BlockStack>
-          </BlockStack>
-        </InlineLayout>
-        <Text appearance='subdued'>Customize your invoice</Text>
-        {/* Business Options */}
-        <Checkbox
-          id='checkbox-business'
-          name='checkbox-business'
-          checked={isBusiness}
-          onChange={handleBusinessChange}
-          accessibilityLabel='Enable business purchase options'>
-          Purchasing as a business
-        </Checkbox>
-        {isBusiness && (
-          <BlockStack>
-            <TextField label='Company Name' />
-            <Select
-              required
-              label='Country/Region'
-              options={countries}
-              value='US'
-            />
-            <Select required label='Tax ID' options={countries} value='US' />
-            <TextField label='Tax Number' />
-          </BlockStack>
-        )}
+          </InlineLayout>
+          <Text appearance='subdued'>Customize your invoice</Text>
+          {/* Business Options */}
+          <Checkbox
+            id='checkbox-business'
+            name='checkbox-business'
+            checked={isBusiness}
+            onChange={handleBusinessChange}
+            accessibilityLabel='Enable business purchase options'>
+            Purchasing as a business
+          </Checkbox>
+          {isBusiness && (
+            <BlockStack>
+              <TextField label='Company Name' />
+              <Select
+                required
+                label='Country/Region'
+                options={countries}
+                value='US'
+              />
+              <Select required label='Tax ID' options={countries} value='US' />
+              <TextField label='Tax Number' />
+            </BlockStack>
+          )}
 
-        {/* Billing Options */}
-        <Checkbox
-          id='checkbox-billing'
-          name='checkbox-billing'
-          checked={updateBilling}
-          onChange={handleBillingChange}
-          accessibilityLabel='Enable custom billing details'>
-          Update invoice billing details
-        </Checkbox>
-        {updateBilling && (
-          <BlockStack>
-            <Select
-              required
-              label='Country/Region'
-              options={countries}
-              value='US'
-            />
-            <TextField label='Address' />
-            <TextField label='Apartment, suite, etc. (Optional)' />
-            <Select required label='Provinces' value='AL' options={provinces} />
-            <InlineLayout columns={['fill', 'fill']} spacing='base'>
-              <TextField label='City' />
-              <TextField label='Postal Code' />
-            </InlineLayout>
-          </BlockStack>
-        )}
+          {/* Billing Options */}
+          <Checkbox
+            id='checkbox-billing'
+            name='checkbox-billing'
+            checked={updateBilling}
+            onChange={handleBillingChange}
+            accessibilityLabel='Enable custom billing details'>
+            Update invoice billing details
+          </Checkbox>
+          {updateBilling && (
+            <BlockStack>
+              <Select
+                required
+                label='Country/Region'
+                options={countries}
+                value='US'
+              />
+              <TextField label='Address' />
+              <TextField label='Apartment, suite, etc. (Optional)' />
+              <Select
+                required
+                label='Provinces'
+                value='AL'
+                options={provinces}
+              />
+              <InlineLayout columns={['fill', 'fill']} spacing='base'>
+                <TextField label='City' />
+                <TextField label='Postal Code' />
+              </InlineLayout>
+            </BlockStack>
+          )}
 
-        {/* Invoice Options */}
-        <ChoiceList name='group-single' variant='group' value='ship'>
-          <Choice id='ship'>Send invoice by email</Choice>
-          <Choice id='email'>Download Invoice</Choice>
-        </ChoiceList>
+          {/* Invoice Options */}
+          <ChoiceList name='group-single' variant='group' value='ship'>
+            <Choice id='ship'>Send invoice by email</Choice>
+            <Choice id='email'>Download Invoice</Choice>
+          </ChoiceList>
 
-        {/* Generate Invoice Button */}
-        <Button kind='primary' disabled={isSubmitting}>
-          {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
-        </Button>
+          {/* Generate Invoice Button */}
+          <Button kind='primary' disabled={isSubmitting}>
+            {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
+          </Button>
 
-        {/* Success/Error Messages */}
-        {success && invoiceUrl && (
-          <Banner status='success' title='Invoice generated successfully!' />
-        )}
-        {invoiceUrl && (
-          <BlockStack inlineAlignment='center'>
-            <Link to={invoiceUrl}>Click here to download your invoice.</Link>
-          </BlockStack>
-        )}
-        {error && <Banner status='critical' title={`Error: ${error}`} />}
-      </BlockStack>
+          {/* Success/Error Messages */}
+          {success && invoiceUrl && (
+            <Banner status='success' title='Invoice generated successfully!' />
+          )}
+          {invoiceUrl && (
+            <BlockStack inlineAlignment='center'>
+              <Link to={invoiceUrl}>Click here to download your invoice.</Link>
+            </BlockStack>
+          )}
+          {error && <Banner status='critical' title={`Error: ${error}`} />}
+        </BlockStack>
+      )}
     </View>
   )
 }
@@ -1199,11 +1228,15 @@ const ChangeProductSizeAndVariant = ({
   defaultData,
   isLoading
 }) => {
+  const [loadMore, setLoadMore] = useState(4)
   const [lineItemsToBeChange, setLineItemsToBeChange] = useState([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [buttonText, setButtonText] = useState('Save')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const handleViewMore = () => {
+    setLoadMore((prevCount) => prevCount + 4) // Show 4 more products on each click
+  }
 
   const products = [
     {
@@ -1218,76 +1251,73 @@ const ChangeProductSizeAndVariant = ({
       }
     }
   ]
-
+  const productsToShow = defaultData?.data?.product?.edges.slice(0, loadMore)
+  console.log(defaultData?.data?.product?.edges)
   return (
     <View id={optionName} padding={['base', 'base', 'base', 'base']}>
-      <BlockStack>
-        {products.map((item) => (
-          <InlineLayout
-            key={item?.id}
-            blockAlignment='center'
-            spacing='base'
-            columns={['fill', '35%']}>
-            <InlineLayout columns={['auto', 'fill']} spacing={'base'}>
-              <ProductThumbnail
-                size='base'
-                source={item?.image}
-                badge={item?.currentQuantity} // Display the quantity as a badge
+      {isLoading ? (
+        <BlockStack spacing={'base'}>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <SkeletonTextBlock key={i} size='extraLarge' />
+          ))}
+        </BlockStack>
+      ) : (
+        <BlockStack>
+          {productsToShow?.map((item) => (
+            <InlineLayout
+              key={item?.node?.id}
+              blockAlignment='center'
+              spacing='base'
+              columns={['fill', '35%']}>
+              <InlineLayout columns={['auto', 'fill']} spacing={'base'}>
+                <ProductThumbnail
+                  size='base'
+                  source={item?.node?.image?.url}
+                  badge={item?.node?.currentQuantity}
+                />
+                <BlockStack spacing={'none'}>
+                  <Text size='base'>{item?.node?.title}</Text>
+                  <Text size='small'>{item?.node?.variantTitle}</Text>
+                  <Text>
+                    Price:{' '}
+                    {formatCurrency(
+                      item?.node?.discountedUnitPriceAfterAllDiscountsSet
+                        ?.shopMoney?.currencyCode,
+                      item?.node?.discountedUnitPriceAfterAllDiscountsSet
+                        ?.shopMoney?.amount
+                    )}
+                  </Text>
+                </BlockStack>
+              </InlineLayout>
+              <Select
+                label='Size/Variant'
+                value='2'
+                options={item?.node?.product?.variants?.edges?.map(
+                  (variant) => ({
+                    value: variant?.node?.id || '',
+                    label: variant?.node?.title
+                  })
+                )}
               />
-              <BlockStack spacing={'none'}>
-                <Text size='base'>{item?.title}</Text>
-                <Text size='small'>{item?.variant?.title}</Text>
-                <Text size='small'>${item?.variant?.price}</Text>
-              </BlockStack>
             </InlineLayout>
-            <Select
-              label='Size/Variant'
-              value='2'
-              options={[
-                {
-                  value: '1',
-                  label: 'Medium/Black'
-                },
-                {
-                  value: '2',
-                  label: 'Medium/Black'
-                },
-                {
-                  value: '3',
-                  label: 'Medium/Black'
-                },
-                {
-                  value: '4',
-                  label: 'Medium/Black'
-                },
-                {
-                  value: '5',
-                  label: 'Medium/Black'
-                },
-                {
-                  value: '6',
-                  label: 'Medium/Black'
-                }
-              ]}
-            />
-          </InlineLayout>
-        ))}
+          ))}
 
-        {/* Save button */}
-        <Button kind='primary'>
-          {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
-        </Button>
-        {success && (
-          <Banner status='success' onDismiss={() => setSuccess('')}>
-            {success}
-          </Banner>
-        )}
-        {error && (
-          <Banner status='error' onDismiss={() => setError('')}>
-            {error}
-          </Banner>
-        )}
-      </BlockStack>
+          {/* Save button */}
+          <Button kind='primary'>
+            {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
+          </Button>
+          {success && (
+            <Banner status='success' onDismiss={() => setSuccess('')}>
+              {success}
+            </Banner>
+          )}
+          {error && (
+            <Banner status='error' onDismiss={() => setError('')}>
+              {error}
+            </Banner>
+          )}
+        </BlockStack>
+      )}
     </View>
   )
 }
