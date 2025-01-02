@@ -160,9 +160,6 @@ function Extension() {
               {option?.settings == 'upgrade_shipping_method' && (
                 <UpgradeShippingMethod optionName={option?.settings} />
               )}
-              {option?.settings == 'apply_discount' && (
-                <ApplyDiscount optionName={option?.settings} />
-              )}
               {option?.settings == 'cancel_order' && (
                 <CancelOrder optionName={option?.settings} />
               )}
@@ -513,54 +510,6 @@ const UpgradeShippingMethod = ({ optionName }) => {
             checkout process in the storefront.
           </Text>
         </InlineLayout>
-      </BlockStack>
-    </View>
-  )
-}
-
-const ApplyDiscount = ({ optionName }) => {
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [submitError, setSubmitError] = useState(null)
-  const [submitSuccess, setSubmitSuccess] = useState(false)
-  const [buttonText, setButtonText] = useState('Apply Discount')
-  const [formErrors, setFormErrors] = useState({})
-  const [discountCode, setDiscountCode] = useState('')
-  const [redirectUrl, setRedirectUrl] = useState(null)
-
-  const handleInputChange = (value) => {
-    setDiscountCode(value)
-    setFormErrors({})
-  }
-
-  return (
-    <View id={optionName} padding={['base', 'base', 'base', 'base']}>
-      <BlockStack>
-        <TextField
-          label='Discount Code'
-          name='discount'
-          id='discount'
-          value={discountCode}
-          onChange={handleInputChange}
-          error={formErrors.discount}
-        />
-        <Button kind='primary'>
-          {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
-        </Button>
-        <Banner
-          status='info'
-          title='Important: Your order will be canceled and a new draft order will be created. You will need to complete the order process again.'
-        />
-        {submitSuccess && (
-          <Banner status='success' title='Discount successfully applied!' />
-        )}
-        {submitError && <Banner status='critical' title={submitError} />}
-        {redirectUrl && (
-          <BlockStack inlineAlignment='center'>
-            <Link to={redirectUrl} onPress={handleRedirectClick}>
-              Click here to continue the order process
-            </Link>
-          </BlockStack>
-        )}
       </BlockStack>
     </View>
   )

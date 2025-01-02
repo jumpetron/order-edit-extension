@@ -108,6 +108,7 @@ function Extension() {
                 <BlockStack overflow='hidden' padding='tight'>
                   {products.map((product) => (
                     <InlineLayout
+                      key={product.id}
                       columns={['fill', '30%']}
                       spacing='base'
                       padding='base'>

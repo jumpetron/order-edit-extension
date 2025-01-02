@@ -33,10 +33,12 @@ import {
   ToggleButton,
   BlockLayout,
   useApi,
-  ScrollView
+  ScrollView,
+  SkeletonTextBlock
 } from '@shopify/ui-extensions-react/customer-account'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { countries, provinces } from './lib/countries'
+import formatCurrency from './lib/currencies'
 
 export default reactExtension(
   'customer-account.order-status.block.render',
@@ -45,93 +47,81 @@ export default reactExtension(
 
 function Extension() {
   const [openId, setOpenId] = useState([])
-  const editOrderOption = [
-    {
-      name: 'Edit Shipping Address',
-      icon: 'delivery',
-      settings: 'shipping_address',
-      isAllow: true
-    },
-    {
-      name: 'Change Contact Information',
-      icon: 'profile',
-      settings: 'contact_information',
-      isAllow: true
-    },
-    {
-      name: 'Contact Customer Support',
-      icon: 'profile',
-      settings: 'contact_customer_support',
-      isAllow: true
-    },
-    {
-      name: 'Change Product Quantities',
-      icon: 'plus',
-      settings: 'change_product_quantities',
-      isAllow: true
-    },
-    {
-      name: 'Change Product Variant',
-      icon: 'return',
-      settings: 'change_product_variant',
-      isAllow: true
-    },
-    {
-      name: 'Switch Product',
-      icon: 'reorder',
-      settings: 'switch_product',
-      isAllow: true
-    },
+  const [settings, setSettings] = useState({})
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [loadingState, setLoadingState] = useState({})
+  const [defaultData, setDefaultData] = useState({})
 
-    {
-      name: 'Upgrade Shipping Methods',
-      icon: 'truck',
-      settings: 'upgrade_shipping_method',
-      isAllow: true
-    },
-    {
-      name: 'Add Another Product',
-      icon: 'cart',
-      settings: 'add_another_product',
-      isAllow: true
-    },
-    {
-      name: 'Apply Discount',
-      icon: 'discount',
-      settings: 'apply_discount',
-      isAllow: true
-    },
-    {
-      name: 'Request For Order Cancel',
-      icon: 'close',
-      settings: 'cancel_order',
-      isAllow: true
-    },
-    {
-      name: 'Change Payment Method',
-      icon: 'creditCard',
-      settings: 'change_payment_method',
-      isAllow: true
-    },
-
-    {
-      name: 'Edit Gift Message',
-      icon: 'gift',
-      settings: 'edit_gift_message',
-      isAllow: true
-    },
-    {
-      name: 'Download Invoice',
-      icon: 'image',
-      settings: 'download_invoice',
-      isAllow: true
-    }
-  ]
-
+  const { shop, order, buyerIdentity } = useApi()
+  const orderName = order?.current?.name
+  const shopUrl = shop?.myshopifyDomain
+  const email = buyerIdentity?.email?.current
   const handleDisclosure = (open) => {
     setOpenId(open)
   }
 
+  const prepareHeaders = (headers) => {
+    headers.set('Accept', 'application/json')
+    headers.set('Content-Type', 'application/json')
+    return headers
+  }
+
+  useEffect(() => {
+    const fetchApiData = async () => {
+      const sanitizedOrderName = orderName.replace('#', '')
+      setLoading(true)
+      setError(null)
+
+      try {
+        const response = await fetch(
+          `https://order-editing-staging.cleversity.com/api/storefront/process-eligible-order?order_name=${sanitizedOrderName}&shop_url=${shopUrl}&email=${email}`,
+          {
+            method: 'GET',
+            headers: prepareHeaders(new Headers())
+          }
+        )
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+        const data = await response.json()
+        setSettings(data)
+      } catch (err) {
+        setError(err.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchApiData()
+  }, [orderName, shopUrl, email])
+
+  const handleDefaultData = async (slug) => {
+    setError(null)
+    setLoadingState((prev) => ({ ...prev, [slug]: true }))
+
+    const sanitizedOrderName = orderName.replace('#', '')
+
+    try {
+      const response = await fetch(
+        `https://order-editing-staging.cleversity.com/api/storefront/process-order-edit?order_name=${sanitizedOrderName}&shop_url=${shopUrl}&slug=${slug}`,
+        {
+          method: 'GET',
+          headers: prepareHeaders(new Headers())
+        }
+      )
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      const data = await response.json()
+      setDefaultData((prev) => ({ ...prev, [slug]: data }))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoadingState((prev) => ({ ...prev, [slug]: false }))
+    }
+  }
+  console.log(defaultData)
   return (
     <View
       cornerRadius='large'
@@ -142,13 +132,21 @@ function Extension() {
           <Heading level={1}>Edit Order</Heading>
           <Divider />
         </BlockStack>
-        {editOrderOption
-          ?.filter((option) => option.isAllow)
-          ?.map((option) => (
+        {loading ? (
+          <BlockStack spacing={'base'}>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <SkeletonTextBlock key={i} size='extraLarge' />
+            ))}
+          </BlockStack>
+        ) : (
+          settings?.data?.map((option) => (
             <Disclosure
-              key={option?.settings}
+              key={option?.id}
               onToggle={(open) => handleDisclosure(open)}>
-              <Pressable toggles={option?.settings} padding='base'>
+              <Pressable
+                toggles={option?.slug}
+                padding='base'
+                onPress={() => handleDefaultData(option?.slug)}>
                 <InlineLayout
                   blockAlignment='center'
                   spacing='base'
@@ -156,60 +154,104 @@ function Extension() {
                   <Icon source={option.icon} appearance='monochrome' />
                   <Heading>{option.name}</Heading>
                   <Icon
-                    source={
-                      openId.includes(option?.settings) ? 'minus' : 'plus'
-                    }
+                    source={openId.includes(option?.slug) ? 'minus' : 'plus'}
                     appearance='monochrome'
                   />
                 </InlineLayout>
               </Pressable>
-              {option?.settings == 'shipping_address' && (
-                <ShippingAddress optionName={option?.settings} />
+              {option?.slug == 'shipping_address' && (
+                <ShippingAddress
+                  defaultData={defaultData['shipping_address']}
+                  isLoading={loadingState['shipping_address']}
+                  optionName={option?.slug}
+                />
               )}
-              {option?.settings == 'contact_information' && (
-                <ContactInformation optionName={option?.settings} />
+              {option?.slug == 'change_contact_info' && (
+                <ContactInformation
+                  defaultData={defaultData['change_contact_info']}
+                  isLoading={loadingState['change_contact_info']}
+                  optionName={option?.slug}
+                />
               )}
-              {option?.settings == 'change_product_quantities' && (
-                <ChangeProductQuantities optionName={option?.settings} />
+              {option?.slug == 'change_product_quantities' && (
+                <ChangeProductQuantities
+                  defaultData={defaultData['change_product_quantities']}
+                  isLoading={loadingState['change_product_quantities']}
+                  optionName={option?.slug}
+                />
               )}
-              {option?.settings == 'upgrade_shipping_method' && (
-                <UpgradeShippingMethod optionName={option?.settings} />
+              {option?.slug == 'upgrade_shipping_method' && (
+                <UpgradeShippingMethod
+                  defaultData={defaultData['upgrade_shipping_method']}
+                  isLoading={loadingState['upgrade_shipping_method']}
+                  optionName={option?.slug}
+                />
               )}
-              {option?.settings == 'apply_discount' && (
-                <ApplyDiscount optionName={option?.settings} />
+              {option?.slug == 'request_order_cancel' && (
+                <CancelOrder
+                  defaultData={defaultData['request_order_cancel']}
+                  isLoading={loadingState['request_order_cancel']}
+                  optionName={option?.slug}
+                />
               )}
-              {option?.settings == 'cancel_order' && (
-                <CancelOrder optionName={option?.settings} />
+              {option?.slug == 'download_invoice' && (
+                <DownloadInvoice
+                  defaultData={defaultData['download_invoice']}
+                  isLoading={loadingState['download_invoice']}
+                  optionName={option?.slug}
+                />
               )}
-              {option?.settings == 'download_invoice' && (
-                <DownloadInvoice optionName={option?.settings} />
+              {option?.slug == 'edit_gift_message' && (
+                <EditGiftMessage
+                  defaultData={defaultData['edit_gift_message']}
+                  isLoading={loadingState['edit_gift_message']}
+                  optionName={option?.slug}
+                />
               )}
-              {option?.settings == 'edit_gift_message' && (
-                <EditGiftMessage optionName={option?.settings} />
+              {option?.slug == 'change_payment_method' && (
+                <ChangePaymentMethod
+                  defaultData={defaultData['change_payment_method']}
+                  isLoading={loadingState['change_payment_method']}
+                  optionName={option?.slug}
+                />
               )}
-              {option?.settings == 'change_payment_method' && (
-                <ChangePaymentMethod optionName={option?.settings} />
+              {option?.slug == 'add_another_product' && (
+                <AddAnotherProduct
+                  defaultData={defaultData['add_another_product']}
+                  isLoading={loadingState['add_another_product']}
+                  optionName={option?.slug}
+                />
               )}
-              {option?.settings == 'add_another_product' && (
-                <AddAnotherProduct optionName={option?.settings} />
+              {option?.slug == 'change_size_variant' && (
+                <ChangeProductSizeAndVariant
+                  defaultData={defaultData['change_size_variant']}
+                  isLoading={loadingState['change_size_variant']}
+                  optionName={option?.slug}
+                />
               )}
-              {option?.settings == 'change_product_variant' && (
-                <ChangeProductSizeAndVariant optionName={option?.settings} />
+              {option?.slug == 'switch_product' && (
+                <SwitchProduct
+                  defaultData={defaultData['switch_product']}
+                  isLoading={loadingState['switch_product']}
+                  optionName={option?.slug}
+                />
               )}
-              {option?.settings == 'switch_product' && (
-                <SwitchProduct optionName={option?.settings} />
-              )}
-              {option?.settings == 'contact_customer_support' && (
-                <ContactCustomerSupport optionName={option?.settings} />
+              {option?.slug == 'contact_customer_support' && (
+                <ContactCustomerSupport
+                  defaultData={defaultData['contact_customer_support']}
+                  isLoading={loadingState['contact_customer_support']}
+                  optionName={option?.slug}
+                />
               )}
             </Disclosure>
-          ))}
+          ))
+        )}
       </BlockStack>
     </View>
   )
 }
 
-const ShippingAddress = ({ optionName }) => {
+const ShippingAddress = ({ optionName, defaultData, isLoading }) => {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState(null)
   const [submitSuccess, setSubmitSuccess] = useState(false)
@@ -228,109 +270,112 @@ const ShippingAddress = ({ optionName }) => {
     province_code: 'NY',
     zip: '1216'
   }
-
   return (
     <View id={optionName} padding={['base', 'base', 'base', 'base']}>
       <Form>
-        <BlockStack>
-          <Select
-            required
-            label='Country/Region'
-            options={countries}
-            value={'US'}
-            onChange={(value) => handleInputChange('countryCodeV2', value)}
-          />
-          <InlineLayout columns={['fill', 'fill']} spacing='base'>
-            <TextField
+        {isLoading ? (
+          <BlockStack spacing={'base'}>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <SkeletonTextBlock key={i} size='extraLarge' />
+            ))}
+          </BlockStack>
+        ) : (
+          <BlockStack>
+            <Select
               required
-              label='First Name'
-              value={payload?.firstName || ''}
-              onChange={(value) => handleInputChange('firstName', value)}
-              error={formErrors.firstName}
+              label='Country/Region'
+              options={countries}
+              value={defaultData?.data?.shipping_address?.countryCodeV2}
+              onChange={(value) => handleInputChange('countryCodeV2', value)}
             />
-            <TextField
+            <InlineLayout columns={['fill', 'fill']} spacing='base'>
+              <TextField
+                required
+                label='First Name'
+                value={defaultData?.data?.shipping_address?.firstName}
+                onChange={(value) => handleInputChange('firstName', value)}
+                error={formErrors.firstName}
+              />
+              <TextField
+                required
+                label='Last Name'
+                value={defaultData?.data?.shipping_address?.lastName}
+                onChange={(value) => handleInputChange('lastName', value)}
+                error={formErrors.lastName}
+              />
+            </InlineLayout>
+            <PhoneField
               required
-              label='Last Name'
-              value={payload?.lastName || ''}
-              onChange={(value) => handleInputChange('lastName', value)}
-              error={formErrors.lastName}
-            />
-          </InlineLayout>
-          <PhoneField
-            required
-            label='Phone'
-            autocomplete={true}
-            value={payload?.phone || ''}
-            onChange={(value) => handleInputChange('phone', value)}
-            error={formErrors.phone}
-          />
-          <TextField
-            required
-            label='Address'
-            value={payload?.address1 || ''}
-            onChange={(value) => handleInputChange('address1', value)}
-            error={formErrors.address1}
-          />
-          <TextField
-            label='Apartment, suite, etc. (Optional)'
-            value={payload?.address2 || ''}
-            onChange={(value) => handleInputChange('address2', value)}
-            error={formErrors.address2}
-          />
-
-          <Select
-            required
-            label='Provinces'
-            value={payload?.province_code || 'AL'}
-            options={provinces}
-            onChange={(value) => handleInputChange('provinceCode', value)}
-            error={formErrors.province_code}
-          />
-
-          <InlineLayout columns={['fill', 'fill']} spacing='base'>
-            <TextField
-              required
-              label='City'
-              value={payload?.city || ''}
-              onChange={(value) => handleInputChange('city', value)}
-              error={formErrors.city}
+              label='Phone'
+              autocomplete={true}
+              value={defaultData?.data?.shipping_address?.phone}
+              onChange={(value) => handleInputChange('phone', value)}
+              error={formErrors.phone}
             />
             <TextField
               required
-              label='ZIP Code'
-              value={payload?.zip || ''}
-              onChange={(value) => handleInputChange('zip', value)}
-              error={formErrors.zip}
+              label='Address'
+              value={defaultData?.data?.shipping_address?.address1}
+              onChange={(value) => handleInputChange('address1', value)}
+              error={formErrors.address1}
             />
-          </InlineLayout>
-          <Checkbox id='checkbox' name='checkbox'>
-            Update your default address
-          </Checkbox>
-
-          {/* Conditional Success and Error Banners */}
-          {submitSuccess && (
-            <Banner
-              status='success'
-              title='Your shipping address has been successfully updated!'
+            <TextField
+              label='Apartment, suite, etc. (Optional)'
+              value={defaultData?.data?.shipping_address?.address2}
+              onChange={(value) => handleInputChange('address2', value)}
+              error={formErrors.address2}
             />
-          )}
-          {submitError && <Banner status='warning' title={submitError} />}
 
-          {/* Submit Button with Spinner */}
-          <Button accessibilityRole='submit'>
-            {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
-          </Button>
-        </BlockStack>
+            <Select
+              required
+              label='Provinces'
+              value={payload?.province_code || 'AL'}
+              options={provinces}
+              onChange={(value) => handleInputChange('provinceCode', value)}
+              error={formErrors.province_code}
+            />
+
+            <InlineLayout columns={['fill', 'fill']} spacing='base'>
+              <TextField
+                required
+                label='City'
+                value={defaultData?.data?.shipping_address?.city}
+                onChange={(value) => handleInputChange('city', value)}
+                error={formErrors.city}
+              />
+              <TextField
+                required
+                label='ZIP Code'
+                value={defaultData?.data?.shipping_address?.zip}
+                onChange={(value) => handleInputChange('zip', value)}
+                error={formErrors.zip}
+              />
+            </InlineLayout>
+            <Checkbox id='checkbox' name='checkbox'>
+              Update your default address
+            </Checkbox>
+
+            {/* Conditional Success and Error Banners */}
+            {submitSuccess && (
+              <Banner
+                status='success'
+                title='Your shipping address has been successfully updated!'
+              />
+            )}
+            {submitError && <Banner status='warning' title={submitError} />}
+
+            {/* Submit Button with Spinner */}
+            <Button accessibilityRole='submit'>
+              {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
+            </Button>
+          </BlockStack>
+        )}
       </Form>
     </View>
   )
 }
 
-const ContactInformation = ({ optionName }) => {
-  const [contactInformation, setContactInformation] = useState({
-    email: 'ahmedfoysal@gmail.com',
-    phone: '021597845523236'
-  })
+const ContactInformation = ({ optionName, defaultData, isLoading }) => {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState(null)
   const [submitSuccess, setSubmitSuccess] = useState(false)
@@ -343,130 +388,122 @@ const ContactInformation = ({ optionName }) => {
     order_id: '123456',
     phone: '021597845523236'
   }
-
   return (
     <View id={optionName} padding={['base', 'base', 'base', 'base']}>
       <Form>
-        <BlockStack>
-          <TextField
-            value={contactInformation?.email}
-            label='Email'
-            name='email'
-            id='email'
-            onChange={(value) => handleInputChange('email', value)}
-            error={formErrors.email}
-            required
-          />
-          <TextField
-            value={contactInformation?.phone}
-            label='Phone Number'
-            name='phone'
-            onChange={(value) => handleInputChange('phone', value)}
-            id='phone'
-            error={formErrors.phone}
-            required
-          />
-          <Checkbox id='checkbox' name='checkbox'>
-            Update profile
-          </Checkbox>
-          {/* Conditional Success and Error Banners */}
-          {submitSuccess && (
-            <Banner
-              status='success'
-              title='Your contact information has been successfully updated!'
+        {isLoading ? (
+          <BlockStack spacing={'base'}>
+            {Array.from({ length: 2 }).map((_, i) => (
+              <SkeletonTextBlock key={i} size='extraLarge' />
+            ))}
+          </BlockStack>
+        ) : (
+          <BlockStack>
+            <TextField
+              value={defaultData?.data?.contact?.email}
+              label='Email'
+              name='email'
+              id='email'
+              onChange={(value) => handleInputChange('email', value)}
+              error={formErrors.email}
+              required
             />
-          )}
-          {submitError && <Banner status='warning' title={submitError} />}
-          <Button accessibilityRole='submit'>
-            {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
-          </Button>
-        </BlockStack>
+            <TextField
+              value={defaultData?.data?.contact?.phone}
+              label='Phone Number'
+              name='phone'
+              onChange={(value) => handleInputChange('phone', value)}
+              id='phone'
+              error={formErrors.phone}
+              required
+            />
+            <Checkbox id='checkbox' name='checkbox'>
+              Update profile
+            </Checkbox>
+            {/* Conditional Success and Error Banners */}
+            {submitSuccess && (
+              <Banner
+                status='success'
+                title='Your contact information has been successfully updated!'
+              />
+            )}
+            {submitError && <Banner status='warning' title={submitError} />}
+            <Button accessibilityRole='submit'>
+              {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
+            </Button>
+          </BlockStack>
+        )}
       </Form>
     </View>
   )
 }
 
-const ContactCustomerSupport = ({ optionName }) => {
-  const [contactInformation, setContactInformation] = useState({
-    email: 'ahmedfoysal@gmail.com',
-    phone: '021597845523236'
-  })
+const ContactCustomerSupport = ({ optionName, defaultData, isLoading }) => {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState(null)
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [buttonText, setButtonText] = useState('Send message')
   const [formErrors, setFormErrors] = useState({})
-  const contactReason = [
-    {
-      value: '1',
-      label: 'I have a question about the product'
-    },
-    {
-      value: '2',
-      label: 'I want to change something about my order'
-    },
-    {
-      value: '3',
-      label: 'I want to cancel my order'
-    },
-    {
-      value: '4',
-      label: `I haven't received my order`
-    },
-    {
-      value: '5',
-      label: `There's problem with my order`
-    },
-    {
-      value: '6',
-      label: 'Other'
-    }
-  ]
+
+  const contactReason =
+    defaultData?.data?.support_reason_list?.reasons?.map((item) => ({
+      value: item.title,
+      label: item.title
+    })) || []
+
   return (
     <View id={optionName} padding={['base', 'base', 'base', 'base']}>
       <Form>
-        <BlockStack>
-          <Select label='Support Reason' value='1' options={contactReason} />
-          <TextField
-            value={contactInformation?.email}
-            label='Email'
-            name='email'
-            id='email'
-            onChange={(value) => handleInputChange('email', value)}
-            error={formErrors.email}
-            required
-          />
-          <TextField
-            value={contactInformation?.phone}
-            label='Phone Number'
-            name='phone'
-            onChange={(value) => handleInputChange('phone', value)}
-            id='phone'
-            error={formErrors.phone}
-            required
-          />
-          <TextField label='Write here' multiline='5' />
-          {/* Conditional Success and Error Banners */}
-          {submitSuccess && (
-            <Banner
-              status='success'
-              title='Your contact information has been successfully updated!'
+        {isLoading ? (
+          <BlockStack spacing={'base'}>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <SkeletonTextBlock key={i} size='extraLarge' />
+            ))}
+          </BlockStack>
+        ) : (
+          <BlockStack>
+            <Select label='Support Reason' value='1' options={contactReason} />
+            <TextField
+              value={defaultData?.data?.customer?.email}
+              label='Email'
+              name='email'
+              id='email'
+              onChange={(value) => handleInputChange('email', value)}
+              error={formErrors.email}
+              required
             />
-          )}
-          {submitError && <Banner status='warning' title={submitError} />}
-          <Button accessibilityRole='submit'>
-            {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
-          </Button>
-        </BlockStack>
+            <TextField
+              value={defaultData?.data?.customer?.phone}
+              label='Phone Number'
+              name='phone'
+              onChange={(value) => handleInputChange('phone', value)}
+              id='phone'
+              error={formErrors.phone}
+              required
+            />
+            <TextField label='Write here' multiline='5' />
+            {/* Conditional Success and Error Banners */}
+            {submitSuccess && (
+              <Banner
+                status='success'
+                title='Your contact information has been successfully updated!'
+              />
+            )}
+            {submitError && <Banner status='warning' title={submitError} />}
+            <Button accessibilityRole='submit'>
+              {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
+            </Button>
+          </BlockStack>
+        )}
       </Form>
     </View>
   )
 }
 
-const ChangeProductQuantities = ({ optionName }) => {
+const ChangeProductQuantities = ({ optionName, defaultData, isLoading }) => {
   const [loadMore, setLoadMore] = useState(4)
   const [buttonText, setButtonText] = useState('Save')
-  const [isSubmitting, setIsSubmitting] = useState(false) // For saving data
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
@@ -474,77 +511,84 @@ const ChangeProductQuantities = ({ optionName }) => {
     setLoadMore((prevCount) => prevCount + 4)
   }
 
-  const products = [
-    {
-      id: '123',
-      image:
-        'https://cdn.shopify.com/s/files/1/0711/0249/6991/files/Main_0a40b01b-5021-48c1-80d1-aa8ab4876d3d.jpg?v=1720981400',
-      title: 'The Collection Snowboard: Hydrogen',
-      variant: {
-        title: 'medium / black / large',
-        price: '200'
-      }
-    }
-  ]
-
-  const productsToShow = products.slice(0, loadMore)
-
+  const productsToShow = defaultData?.data?.product?.edges.slice(0, loadMore)
+  console.log(defaultData?.data?.product?.edges)
   return (
     <View id={optionName} padding={['base', 'base', 'base', 'base']}>
-      <BlockStack>
-        {productsToShow?.map((item) => (
-          <InlineLayout
-            key={item.id}
-            blockAlignment='center'
-            spacing='base'
-            columns={['fill', '30%']}>
-            <InlineLayout columns={['auto', 'fill']} spacing='base'>
-              <ProductThumbnail size='base' source={item?.image} badge={'1'} />
-              <BlockStack spacing='none'>
-                <Text size='base' emphasis='bold'>
-                  {item?.title}
-                </Text>
-                <Text size='small'>{item?.variant?.title}</Text>
-                <Text size='small'>Price: ${item?.variant?.price}</Text>
+      {isLoading ? (
+        <BlockStack spacing={'base'}>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <SkeletonTextBlock key={i} size='extraLarge' />
+          ))}
+        </BlockStack>
+      ) : (
+        <BlockStack>
+          {productsToShow?.map((item) => (
+            <InlineLayout
+              key={item.node?.id}
+              blockAlignment='center'
+              spacing='base'
+              columns={['fill', '30%']}>
+              <InlineLayout columns={['auto', 'fill']} spacing='base'>
+                <ProductThumbnail
+                  size='base'
+                  source={item?.node?.image?.url}
+                  badge={item?.node?.currentQuantity}
+                />
+                <BlockStack spacing='none'>
+                  <Text size='base' emphasis='bold'>
+                    {item?.node?.title}
+                  </Text>
+                  <Text size='small'>{item?.node?.variantTitle}</Text>
+                  <Text>
+                    Price:{' '}
+                    {formatCurrency(
+                      item?.node?.discountedUnitPriceAfterAllDiscountsSet
+                        ?.shopMoney?.currencyCode,
+                      item?.node?.discountedUnitPriceAfterAllDiscountsSet
+                        ?.shopMoney?.amount
+                    )}
+                  </Text>
+                </BlockStack>
+              </InlineLayout>
+
+              <BlockStack inlineAlignment='end'>
+                <Stepper label='Quantity' value={1} min={1} />
+                <Link to='#'>Remove</Link>
               </BlockStack>
             </InlineLayout>
+          ))}
 
-            <BlockStack inlineAlignment='end'>
-              <Stepper label='Quantity' value={1} min={1} />
-              <Link to='#'>Remove</Link>
-            </BlockStack>
-          </InlineLayout>
-        ))}
+          <InlineStack spacing='extraTight' blockAlignment='center'>
+            <Icon size='small' source='info' appearance='subdued' />
+            <Text size='small'>Taxes and shipping update automatically.</Text>
+          </InlineStack>
+          {loadMore < defaultData?.data?.product?.edges.length && (
+            <Link onPress={handleViewMore}>View more products</Link>
+          )}
+          <Button kind='primary'>
+            {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
+          </Button>
+          {/* Error Banner */}
+          {error && (
+            <Banner status='critical' onDismiss={() => setError('')}>
+              <Text>{error}</Text>
+            </Banner>
+          )}
 
-        <InlineStack spacing='extraTight' blockAlignment='center'>
-          <Icon size='small' source='info' appearance='subdued' />
-          <Text size='small'>Taxes and shipping update automatically.</Text>
-        </InlineStack>
-        {loadMore < products.length && (
-          <Link onPress={handleViewMore}>View more products</Link>
-        )}
-        <Button kind='primary'>
-          {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
-        </Button>
-        {/* Error Banner */}
-        {error && (
-          <Banner status='critical' onDismiss={() => setError('')}>
-            <Text>{error}</Text>
-          </Banner>
-        )}
-
-        {/* Success Banner */}
-        {success && (
-          <Banner status='success' onDismiss={() => setSuccess('')}>
-            <Text>{success}</Text>
-          </Banner>
-        )}
-      </BlockStack>
+          {/* Success Banner */}
+          {success && (
+            <Banner status='success' onDismiss={() => setSuccess('')}>
+              <Text>{success}</Text>
+            </Banner>
+          )}
+        </BlockStack>
+      )}
     </View>
   )
 }
 
-const UpgradeShippingMethod = ({ optionName }) => {
+const UpgradeShippingMethod = ({ optionName, defaultData }) => {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
   const [shippingMethod, setShippingMethod] = useState([
@@ -617,109 +661,46 @@ const UpgradeShippingMethod = ({ optionName }) => {
   )
 }
 
-const ApplyDiscount = ({ optionName }) => {
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [submitError, setSubmitError] = useState(null)
-  const [submitSuccess, setSubmitSuccess] = useState(false)
-  const [buttonText, setButtonText] = useState('Apply Discount')
-  const [formErrors, setFormErrors] = useState({})
-  const [discountCode, setDiscountCode] = useState('')
-  const [redirectUrl, setRedirectUrl] = useState(null)
-
-  const handleInputChange = (value) => {
-    setDiscountCode(value)
-    setFormErrors({})
-  }
-
-  return (
-    <View id={optionName} padding={['base', 'base', 'base', 'base']}>
-      <BlockStack>
-        <TextField
-          label='Discount Code'
-          name='discount'
-          id='discount'
-          value={discountCode}
-          onChange={handleInputChange}
-          error={formErrors.discount}
-        />
-        <Button kind='primary'>
-          {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
-        </Button>
-        <Banner
-          status='info'
-          title='Important: Your order will be canceled and a new draft order will be created. You will need to complete the order process again.'
-        />
-        {submitSuccess && (
-          <Banner status='success' title='Discount successfully applied!' />
-        )}
-        {submitError && <Banner status='critical' title={submitError} />}
-        {redirectUrl && (
-          <BlockStack inlineAlignment='center'>
-            <Link to={redirectUrl} onPress={handleRedirectClick}>
-              Click here to continue the order process
-            </Link>
-          </BlockStack>
-        )}
-      </BlockStack>
-    </View>
-  )
-}
-
-const CancelOrder = ({ optionName }) => {
-  const [contactInformation, setContactInformation] = useState({
-    email: 'ahmedfoysal@gmail.com',
-    phone: '021597845523236'
-  })
+const CancelOrder = ({ optionName, defaultData, isLoading }) => {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [buttonText, setButtonText] = useState('Cancel Order')
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [submitError, setSubmitError] = useState(null)
-  const cancelReason = [
-    {
-      value: '1',
-      label: 'Found a better price elswhere'
-    },
-    {
-      value: '2',
-      label: 'Item is no longer needed'
-    },
-    {
-      value: '3',
-      label: 'Delivery costs are too expensive'
-    },
-    {
-      value: '4',
-      label: `The item was purchased by mistake`
-    },
-    {
-      value: '5',
-      label: `The order is taking too long to arrive`
-    },
-    {
-      value: '6',
-      label: 'Change mind about the product'
-    }
-  ]
+
+  const cancelReason =
+    defaultData?.data?.cancel_reason_list?.returnReasons?.map((item) => ({
+      value: item.title,
+      label: item.title
+    })) || []
+
   return (
     <View id={optionName} padding={['none', 'base', 'base', 'base']}>
       <BlockStack>
         <Form>
-          <BlockStack>
-            <Select
-              label='Select cancel Reason'
-              value='1'
-              options={cancelReason}
-            />
+          {isLoading ? (
+            <BlockStack spacing={'base'}>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <SkeletonTextBlock key={i} size='extraLarge' />
+              ))}
+            </BlockStack>
+          ) : (
+            <BlockStack>
+              <Select
+                label='Select cancel Reason'
+                value='1'
+                options={cancelReason}
+              />
 
-            <TextField
-              label='Why you want to cancel your order?'
-              multiline='5'
-            />
-            <Text size='small' appearance='subdued'>
-              You'll be contacted by the customer support team to confirm the
-              cancellation.
-            </Text>
-          </BlockStack>
+              <TextField
+                label='Why you want to cancel your order?'
+                multiline='5'
+              />
+              <Text size='small' appearance='subdued'>
+                You'll be contacted by the customer support team to confirm the
+                cancellation.
+              </Text>
+            </BlockStack>
+          )}
         </Form>
         <Button kind='primary'>
           {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
@@ -738,7 +719,7 @@ const CancelOrder = ({ optionName }) => {
   )
 }
 
-const ChangePaymentMethod = ({ optionName }) => {
+const ChangePaymentMethod = ({ optionName, defaultData }) => {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [submitError, setSubmitError] = useState(null)
@@ -788,7 +769,7 @@ const ChangePaymentMethod = ({ optionName }) => {
   )
 }
 
-const EditGiftMessage = ({ optionName }) => {
+const EditGiftMessage = ({ optionName, defaultData }) => {
   const [giftMessages, setGiftMessages] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
@@ -837,8 +818,8 @@ const EditGiftMessage = ({ optionName }) => {
   )
 }
 
-const DownloadInvoice = ({ optionName }) => {
-  const [isLoading, setIsLoading] = useState(false)
+const DownloadInvoice = ({ optionName, defaultData, isLoading }) => {
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(false)
   const [invoiceUrl, setInvoiceUrl] = useState(null)
@@ -853,7 +834,7 @@ const DownloadInvoice = ({ optionName }) => {
   const handleBillingChange = (value) => {
     setUpdateBilling(value)
   }
-
+  console.log(defaultData)
   return (
     <View id={optionName} padding={['base', 'base', 'base', 'base']}>
       <BlockStack>
@@ -934,8 +915,8 @@ const DownloadInvoice = ({ optionName }) => {
         </ChoiceList>
 
         {/* Generate Invoice Button */}
-        <Button kind='primary' disabled={isLoading}>
-          {isLoading ? <Spinner appearance='subdued' /> : buttonText}
+        <Button kind='primary' disabled={isSubmitting}>
+          {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
         </Button>
 
         {/* Success/Error Messages */}
@@ -1213,7 +1194,11 @@ const AddAnotherProduct = ({ optionName }) => {
   )
 }
 
-const ChangeProductSizeAndVariant = ({ optionName }) => {
+const ChangeProductSizeAndVariant = ({
+  optionName,
+  defaultData,
+  isLoading
+}) => {
   const [lineItemsToBeChange, setLineItemsToBeChange] = useState([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [buttonText, setButtonText] = useState('Save')
@@ -1307,7 +1292,7 @@ const ChangeProductSizeAndVariant = ({ optionName }) => {
   )
 }
 
-const SwitchProduct = ({ optionName }) => {
+const SwitchProduct = ({ optionName, defaultData }) => {
   const [loadMore, setLoadMore] = useState(4)
   const [selectedProducts, setSelectedProducts] = useState([])
   const [isSubmitting, setIsSubmitting] = useState(false)

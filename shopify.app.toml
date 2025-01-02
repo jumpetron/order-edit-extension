@@ -3,7 +3,7 @@
 client_id = "373349d948621559bd7e23797dfcaa57"
 application_url = "https://shopify.dev/apps/default-app-home"
 embedded = false
-name = "Optimarko Order Edit"
+name = "Qtane - Order Edit"
 handle = "opt-order-edit"
 
 [build]
