@@ -84,12 +84,6 @@ function Extension() {
       isAllow: true
     },
     {
-      name: 'Apply Discount',
-      icon: 'discount',
-      settings: 'apply_discount',
-      isAllow: true
-    },
-    {
       name: 'Request For Order Cancel',
       icon: 'close',
       settings: 'cancel_order',

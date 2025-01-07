@@ -186,7 +186,7 @@ function Extension() {
             ))}
           </BlockStack>
         ) : (
-          settings?.data?.map((option) => (
+          settings?.data?.menus?.map((option) => (
             <Disclosure
               key={option?.id}
               onToggle={(open) => handleDisclosure(open)}>
@@ -226,6 +226,8 @@ function Extension() {
               )}
               {option?.slug == 'change_product_quantities' && (
                 <ChangeProductQuantities
+                  shopUrl={shopUrl}
+                  order_id={order_id}
                   defaultData={defaultData['change_product_quantities']}
                   isLoading={loadingState['change_product_quantities']}
                   optionName={option?.slug}
@@ -283,6 +285,8 @@ function Extension() {
               )}
               {option?.slug == 'change_size_variant' && (
                 <ChangeProductSizeAndVariant
+                  shopUrl={shopUrl}
+                  order_id={order_id}
                   defaultData={defaultData['change_size_variant']}
                   isLoading={loadingState['change_size_variant']}
                   optionName={option?.slug}
@@ -290,6 +294,8 @@ function Extension() {
               )}
               {option?.slug == 'switch_product' && (
                 <SwitchProduct
+                  shopUrl={shopUrl}
+                  order_id={order_id}
                   defaultData={defaultData['switch_product']}
                   isLoading={loadingState['switch_product']}
                   optionName={option?.slug}
@@ -386,6 +392,9 @@ const ShippingAddress = ({
       if (response.status === 201) {
         setSubmitSuccess(true)
         setButtonText('Updated')
+        ui.forceDataRefresh(
+          'Your shipping address has been successfully updated!'
+        )
       } else {
         const errorData = await response.json()
         throw new Error(
@@ -396,9 +405,6 @@ const ShippingAddress = ({
       setSubmitError(error.message || 'An error occurred while updating.')
     } finally {
       setIsSubmitting(false)
-      ui.forceDataRefresh(
-        'Your shipping address has been successfully updated!'
-      )
     }
   }
   useEffect(() => {
@@ -598,6 +604,9 @@ const ContactInformation = ({
       if (response.ok) {
         setSubmitSuccess(true)
         setButtonText('Updated')
+        ui.forceDataRefresh(
+          'Your contact information has been successfully updated!'
+        )
       } else {
         const errorData = await response.json()
         throw new Error(
@@ -609,9 +618,6 @@ const ContactInformation = ({
     } finally {
       setIsSubmitting(false)
       setButtonText('Update contact information')
-      ui.forceDataRefresh(
-        'Your contact information has been successfully updated!'
-      )
     }
   }
 
@@ -752,6 +758,7 @@ const ContactCustomerSupport = ({
       if (response.ok) {
         setSubmitSuccess(true)
         setButtonText('Message sent')
+        ui.forceDataRefresh('Message sent successfully!')
       } else {
         const errorData = await response.json()
         throw new Error(errorData.message || 'Failed to send the message.')
@@ -762,7 +769,6 @@ const ContactCustomerSupport = ({
       )
     } finally {
       setIsSubmitting(false)
-      ui.forceDataRefresh('Message sent successfully!')
     }
   }
 
@@ -849,23 +855,120 @@ const ContactCustomerSupport = ({
   )
 }
 
-const ChangeProductQuantities = ({ optionName, defaultData, isLoading }) => {
+const ChangeProductQuantities = ({
+  optionName,
+  defaultData,
+  isLoading,
+  order_id,
+  shopUrl
+}) => {
+  const { ui } = useApi()
   const [loadMore, setLoadMore] = useState(4)
   const [buttonText, setButtonText] = useState('Save')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [quantities, setQuantities] = useState({})
+  const [removing, setRemoving] = useState({}) // Track removing state per product
 
   const handleViewMore = () => {
     setLoadMore((prevCount) => prevCount + 4)
   }
 
-  const productsToShow = defaultData?.data?.product?.edges.slice(0, loadMore)
+  const handleQuantityChange = (lineItemId, value) => {
+    setQuantities((prev) => ({
+      ...prev,
+      [lineItemId]: value
+    }))
+  }
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      const promises = Object.entries(quantities).map(
+        async ([lineItemId, quantity]) => {
+          const payload = {
+            order_id,
+            shop_url: shopUrl,
+            line_item_id: lineItemId,
+            quantity
+          }
+
+          const response = await fetch(
+            'https://order-editing-staging.cleversity.com/api/storefront/change-product-quantities',
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            }
+          )
+
+          if (!response.ok) {
+            const errorData = await response.json()
+            throw new Error(
+              errorData.message || 'Failed to update product quantity.'
+            )
+          }
+        }
+      )
+
+      await Promise.all(promises)
+      setSuccess('Product quantities updated successfully.')
+      setButtonText('Saved')
+      ui.forceDataRefresh('Quantity change successfully!')
+    } catch (err) {
+      setError(err.message || 'An error occurred while updating quantities.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleRemoveProduct = async (lineItemId) => {
+    setRemoving((prev) => ({ ...prev, [lineItemId]: true }))
+    setError('')
+    setSuccess('')
+
+    try {
+      const payload = {
+        order_id,
+        shop_url: shopUrl,
+        line_item_id: lineItemId
+      }
+
+      const response = await fetch(
+        'https://order-editing-staging.cleversity.com/api/storefront/remove-product',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        }
+      )
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to remove product.')
+      }
+
+      setSuccess('Product removed successfully.')
+      ui.forceDataRefresh('Product removed successfully!')
+    } catch (err) {
+      setError(err.message || 'An error occurred while removing the product.')
+    } finally {
+      setRemoving((prev) => ({ ...prev, [lineItemId]: false }))
+    }
+  }
+
+  const productsToShow = defaultData?.data?.product?.edges
+    .filter((item) => item?.node?.currentQuantity > 0) // Filter products with quantity > 0
+    .slice(0, loadMore)
 
   return (
     <View id={optionName} padding={['base', 'base', 'base', 'base']}>
       {isLoading ? (
-        <BlockStack spacing={'base'}>
+        <BlockStack spacing='base'>
           {Array.from({ length: 5 }).map((_, i) => (
             <SkeletonTextBlock key={i} size='extraLarge' />
           ))}
@@ -902,8 +1005,23 @@ const ChangeProductQuantities = ({ optionName, defaultData, isLoading }) => {
               </InlineLayout>
 
               <BlockStack inlineAlignment='end'>
-                <Stepper label='Quantity' value={1} min={1} />
-                <Link to='#'>Remove</Link>
+                <Stepper
+                  label='Quantity'
+                  value={quantities[item.node.id] || item.node?.currentQuantity}
+                  min={1}
+                  onChange={(value) =>
+                    handleQuantityChange(item.node.id, value)
+                  }
+                />
+                <Link
+                  onPress={() => handleRemoveProduct(item.node.id)}
+                  disabled={removing[item.node.id]}>
+                  {removing[item.node.id] ? (
+                    <Spinner appearance='subdued' />
+                  ) : (
+                    'Remove'
+                  )}
+                </Link>
               </BlockStack>
             </InlineLayout>
           ))}
@@ -915,7 +1033,7 @@ const ChangeProductQuantities = ({ optionName, defaultData, isLoading }) => {
           {loadMore < defaultData?.data?.product?.edges.length && (
             <Link onPress={handleViewMore}>View more products</Link>
           )}
-          <Button kind='primary'>
+          <Button kind='primary' onPress={handleSubmit} disabled={isSubmitting}>
             {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
           </Button>
           {/* Error Banner */}
@@ -924,7 +1042,6 @@ const ChangeProductQuantities = ({ optionName, defaultData, isLoading }) => {
               <Text>{error}</Text>
             </Banner>
           )}
-
           {/* Success Banner */}
           {success && (
             <Banner status='success' onDismiss={() => setSuccess('')}>
@@ -1259,6 +1376,7 @@ const EditGiftMessage = ({
       if (response.ok) {
         setSubmitSuccess(true)
         setButtonText('Message Saved')
+        ui.forceDataRefresh('Gift message updated successfully!')
       } else {
         const errorData = await response.json()
         throw new Error(errorData.message || 'Failed to save the gift message.')
@@ -1269,7 +1387,6 @@ const EditGiftMessage = ({
       )
     } finally {
       setIsSubmitting(false)
-      ui.forceDataRefresh('Gift message updated successfully!')
     }
   }
 
@@ -1888,19 +2005,81 @@ const AddAnotherProduct = ({
 const ChangeProductSizeAndVariant = ({
   optionName,
   defaultData,
-  isLoading
+  isLoading,
+  order_id,
+  shopUrl
 }) => {
+  const { ui } = useApi()
   const [loadMore, setLoadMore] = useState(4)
-  const [lineItemsToBeChange, setLineItemsToBeChange] = useState([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [buttonText, setButtonText] = useState('Save')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [selectedVariants, setSelectedVariants] = useState({}) // Track selected variants
+
   const handleViewMore = () => {
     setLoadMore((prevCount) => prevCount + 4)
   }
 
-  const productsToShow = defaultData?.data?.product?.edges.slice(0, loadMore)
+  const handleVariantChange = (lineItemId, variantId) => {
+    setSelectedVariants((prev) => ({
+      ...prev,
+      [lineItemId]: variantId
+    }))
+  }
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      const promises = Object.entries(selectedVariants).map(
+        async ([lineItemId, variantId]) => {
+          // Find the product details to get the current quantity
+          const product = defaultData?.data?.product?.edges.find(
+            (item) => item.node.id === lineItemId
+          )
+          const quantity = product?.node?.currentQuantity || 1
+
+          const payload = {
+            order_id,
+            shop_url: shopUrl,
+            variant_id: variantId,
+            quantity,
+            line_item_id: lineItemId
+          }
+
+          const response = await fetch(
+            'https://order-editing-staging.cleversity.com/api/storefront/change-size-variant',
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            }
+          )
+
+          if (!response.ok) {
+            const errorData = await response.json()
+            throw new Error(errorData.message || 'Failed to update variant.')
+          }
+        }
+      )
+
+      await Promise.all(promises)
+      setSuccess('Variants updated successfully.')
+      setButtonText('Saved')
+      ui.forceDataRefresh('Product variant changed successfully!')
+    } catch (err) {
+      setError(err.message || 'An error occurred while updating variants.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const productsToShow = defaultData?.data?.product?.edges
+    .filter((item) => item?.node?.currentQuantity > 0) // Filter products with quantity > 0
+    .slice(0, loadMore)
 
   return (
     <View id={optionName} padding={['base', 'base', 'base', 'base']}>
@@ -1912,50 +2091,64 @@ const ChangeProductSizeAndVariant = ({
         </BlockStack>
       ) : (
         <BlockStack>
-          {productsToShow?.map((item) => (
-            <InlineLayout
-              key={item?.node?.id}
-              blockAlignment='center'
-              spacing='base'
-              columns={['fill', '35%']}>
-              <InlineLayout columns={['auto', 'fill']} spacing={'base'}>
-                <ProductThumbnail
-                  size='base'
-                  source={item?.node?.image?.url}
-                  badge={item?.node?.currentQuantity}
+          {productsToShow?.map((item) => {
+            const currentVariantId = item?.node?.variant?.id
+
+            // Filter out the product's current variant
+            const variantOptions = item?.node?.product?.variants?.edges
+              ?.filter((variant) => variant?.node?.id !== currentVariantId)
+              .map((variant) => ({
+                value: variant?.node?.id || '',
+                label: variant?.node?.title
+              }))
+
+            return (
+              <InlineLayout
+                key={item?.node?.id}
+                blockAlignment='center'
+                spacing='base'
+                columns={['fill', '35%']}>
+                <InlineLayout columns={['auto', 'fill']} spacing={'base'}>
+                  <ProductThumbnail
+                    size='base'
+                    source={item?.node?.image?.url}
+                    badge={item?.node?.currentQuantity}
+                  />
+                  <BlockStack spacing={'none'}>
+                    <Text size='base'>{item?.node?.title}</Text>
+                    <Text size='small'>{item?.node?.variantTitle}</Text>
+                    <Text>
+                      Price:{' '}
+                      {formatCurrency(
+                        item?.node?.discountedUnitPriceAfterAllDiscountsSet
+                          ?.shopMoney?.currencyCode,
+                        item?.node?.discountedUnitPriceAfterAllDiscountsSet
+                          ?.shopMoney?.amount
+                      )}
+                    </Text>
+                  </BlockStack>
+                </InlineLayout>
+                <Select
+                  label='Size/Variant'
+                  value={selectedVariants[item.node.id] || currentVariantId}
+                  options={variantOptions} // Use filtered options here
+                  onChange={(value) => handleVariantChange(item.node.id, value)}
                 />
-                <BlockStack spacing={'none'}>
-                  <Text size='base'>{item?.node?.title}</Text>
-                  <Text size='small'>{item?.node?.variantTitle}</Text>
-                  <Text>
-                    Price:{' '}
-                    {formatCurrency(
-                      item?.node?.discountedUnitPriceAfterAllDiscountsSet
-                        ?.shopMoney?.currencyCode,
-                      item?.node?.discountedUnitPriceAfterAllDiscountsSet
-                        ?.shopMoney?.amount
-                    )}
-                  </Text>
-                </BlockStack>
               </InlineLayout>
-              <Select
-                label='Size/Variant'
-                value='2'
-                options={item?.node?.product?.variants?.edges?.map(
-                  (variant) => ({
-                    value: variant?.node?.id || '',
-                    label: variant?.node?.title
-                  })
-                )}
-              />
-            </InlineLayout>
-          ))}
+            )
+          })}
+
           {loadMore < defaultData?.data?.product?.edges.length && (
             <Link onPress={handleViewMore}>View more products</Link>
           )}
 
           {/* Save button */}
-          <Button kind='primary'>
+          <Button
+            kind='primary'
+            onPress={handleSubmit}
+            disabled={
+              isSubmitting || Object.keys(selectedVariants).length === 0
+            }>
             {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
           </Button>
           {success && (
@@ -1964,7 +2157,7 @@ const ChangeProductSizeAndVariant = ({
             </Banner>
           )}
           {error && (
-            <Banner status='error' onDismiss={() => setError('')}>
+            <Banner status='critical' onDismiss={() => setError('')}>
               {error}
             </Banner>
           )}
@@ -1974,13 +2167,15 @@ const ChangeProductSizeAndVariant = ({
   )
 }
 
-const SwitchProduct = ({ optionName, defaultData, isLoading }) => {
+const SwitchProduct = ({
+  optionName,
+  defaultData,
+  isLoading,
+  order_id,
+  shopUrl
+}) => {
   const [loadMore, setLoadMore] = useState(4)
-  const [selectedProducts, setSelectedProducts] = useState([])
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [submitSuccess, setSubmitSuccess] = useState(false)
-  const [submitError, setSubmitError] = useState(null)
-  const [selectedReplacements, setSelectedReplacements] = useState([])
   const [buttonText, setButtonText] = useState('Save')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -2062,10 +2257,10 @@ const SwitchProduct = ({ optionName, defaultData, isLoading }) => {
   }
   const [hoveredProductId, setHoveredProductId] = useState(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const productsToShow = defaultData?.data?.product?.edges?.slice(0, loadMore)
+
   const [isProductSelect, setIsProductSelect] = useState(false)
   const handleImageChange = (newSource) => {
-    setSelectedImageSource(newSource) // Update the selected image source
+    setSelectedImageSource(newSource)
   }
 
   const handleSinlgeProductClick = () => {
@@ -2074,6 +2269,14 @@ const SwitchProduct = ({ optionName, defaultData, isLoading }) => {
 
   const handleBack = () => {
     setIsProductSelect(false)
+  }
+
+  const productsToShow = defaultData?.data?.product?.edges
+    .filter((item) => item?.node?.currentQuantity > 0)
+    .slice(0, loadMore)
+
+  const handleProductData = (id) => {
+    console.log(id)
   }
 
   return (
@@ -2115,6 +2318,7 @@ const SwitchProduct = ({ optionName, defaultData, isLoading }) => {
                   </BlockStack>
                 </InlineStack>
                 <Button
+                  onPress={() => handleProductData(product?.node?.id)}
                   overlay={
                     <Modal
                       padding
@@ -2331,16 +2535,13 @@ const SwitchProduct = ({ optionName, defaultData, isLoading }) => {
                           </BlockStack>
 
                           {/* Sticky Footer */}
-
-                          <InlineLayout
-                            blockAlignment='baseline'
-                            columns={['fill', 'auto']}>
-                            <Text>Selected: 1</Text>
-                            <InlineStack spacing='base'>
-                              <Button kind='primary'>Back</Button>
-                              <Button kind='secondary'>Done</Button>
-                            </InlineStack>
-                          </InlineLayout>
+                          <Button accessibilityRole='submit'>
+                            {isSubmitting ? (
+                              <Spinner appearance='subdued' />
+                            ) : (
+                              buttonText
+                            )}
+                          </Button>
                         </BlockStack>
                       )}
                     </Modal>
@@ -2350,7 +2551,6 @@ const SwitchProduct = ({ optionName, defaultData, isLoading }) => {
               </InlineLayout>
             ))}
           </BlockStack>
-
           {loadMore < defaultData?.data?.product?.edges.length && (
             <Link onPress={handleViewMore}>View more products</Link>
           )}
