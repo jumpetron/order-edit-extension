@@ -35,7 +35,9 @@ import {
   useApi,
   ScrollView,
   SkeletonTextBlock,
-  Spinner
+  Spinner,
+  SkeletonImage,
+  SkeletonText
 } from '@shopify/ui-extensions-react/customer-account'
 import { useEffect, useState } from 'react'
 import { countries, provinces, taxIdCountries } from './lib/countries'
@@ -153,7 +155,11 @@ function Extension() {
         `https://order-editing-staging.cleversity.com/api/storefront/process-order-edit?order_name=${sanitizedOrderName}&shop_url=${shopUrl}&slug=${slug}`,
         {
           method: 'GET',
-          headers: prepareHeaders(new Headers())
+          headers: prepareHeaders(
+            new Headers({
+              'Content-Type': 'application/json'
+            })
+          )
         }
       )
 
@@ -168,7 +174,7 @@ function Extension() {
       setLoadingState((prev) => ({ ...prev, [slug]: false }))
     }
   }
-
+  console.log(settings)
   return (
     <View
       cornerRadius='large'
@@ -1339,23 +1345,24 @@ const EditGiftMessage = ({
   order_id
 }) => {
   const { ui } = useApi()
-  const [giftMessage, setGiftMessage] = useState('')
+  const [giftMessage, setGiftMessage] = useState({ gift_message: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [submitError, setSubmitError] = useState(null)
   const [buttonText, setButtonText] = useState('Save Message')
 
   const handleGiftMessageChange = (value) => {
-    setGiftMessage(value)
+    setGiftMessage((prev) => ({ ...prev, gift_message: value }))
   }
 
+  // Submit the gift message
   const handleSubmit = async () => {
     setIsSubmitting(true)
     setSubmitError(null)
     setSubmitSuccess(false)
 
     const payload = {
-      gift_message: giftMessage,
+      gift_message: giftMessage.gift_message,
       order_id: order_id,
       shop_url: shopUrl
     }
@@ -1390,6 +1397,17 @@ const EditGiftMessage = ({
     }
   }
 
+  // Initialize gift message from default data
+  useEffect(() => {
+    if (!isLoading && defaultData?.data?.gift_note) {
+      const giftMessageValue = defaultData.data.gift_note.find(
+        (note) => note?.key === 'Gift Message'
+      )?.value
+
+      setGiftMessage({ gift_message: giftMessageValue || '' })
+    }
+  }, [isLoading, defaultData])
+
   return (
     <View id={optionName} padding={['base', 'base', 'base', 'base']}>
       {isLoading ? (
@@ -1403,8 +1421,8 @@ const EditGiftMessage = ({
           <BlockStack>
             <TextField
               label='Type your message'
-              multiline={true}
-              value={giftMessage}
+              multiline={3}
+              value={giftMessage?.gift_message}
               onChange={(value) => handleGiftMessageChange(value)}
             />
 
@@ -1437,7 +1455,9 @@ const DownloadInvoice = ({
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(false)
   const [actionType, setActionType] = useState('download')
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState({
+    customerEmail: ''
+  })
   const [isBusiness, setIsBusiness] = useState(false)
   const [updateBilling, setUpdateBilling] = useState(false)
   const [selectedCountry, setSelectedCountry] = useState('US')
@@ -1475,9 +1495,13 @@ const DownloadInvoice = ({
         billing_city: defaultData?.data?.billing_address?.city,
         billing_postal_code: defaultData?.data?.billing_address?.zip
       })
+
+      setEmail({
+        customerEmail: defaultData?.data?.customer?.email
+      })
     }
   }, [isLoading, defaultData])
-
+  console.log(defaultData?.data?.customer?.email)
   const handleInputChange = (setter) => (value) => setter(value)
   const handleBusinessInputChange = (field) => (value) =>
     setBusinessData((prev) => ({ ...prev, [field]: value }))
@@ -1553,7 +1577,7 @@ const DownloadInvoice = ({
           borderWidth='base'>
           <TextField
             label='Email'
-            value={email}
+            value={email?.customerEmail}
             onChange={handleInputChange(setEmail)}
           />
         </BlockStack>
@@ -1780,13 +1804,12 @@ const AddAnotherProduct = ({
     }
   ]
 
-  const productsToShow = products?.slice(0, loadMore)
+  const productsToShow = defaultData?.products?.slice(0, loadMore)
 
   const handleImageChange = (newSource) => {
     setSelectedImageSource(newSource) // Update the selected image source
   }
 
-  console.log(defaultData?.products)
   return (
     <View id={optionName} padding={['base', 'base', 'base', 'base']}>
       {isLoading ? (
@@ -1801,39 +1824,33 @@ const AddAnotherProduct = ({
             <TextField label='Search product' />
 
             {error && <Banner status='critical' title={error} />}
-            {productsToShow.map((product) => (
+            {productsToShow?.map((product) => (
               <InlineLayout
                 key={product?.id}
                 blockAlignment='center'
                 spacing='extraTight'
                 columns={['fill', 'auto']}>
                 <InlineStack blockAlignment='center' spacing='extraTight'>
-                  <ProductThumbnail size='base' source={product?.image} />
+                  <ProductThumbnail
+                    size='base'
+                    source={product?.featuredMedia?.preview?.image?.url}
+                  />
                   <BlockStack spacing='extraTight'>
                     <Heading level='3'>{product?.title}</Heading>
-                    <InlineStack>
-                      <Text
-                        appearance='subdued'
-                        size='base'
-                        accessibilityRole={
-                          product?.variant?.discountPrice
-                            ? 'deletion'
-                            : undefined
-                        }>
-                        ${product?.variant?.price}{' '}
-                      </Text>
-                      {product?.variant?.discountPrice && (
-                        <Text size='base' appearance='critical'>
-                          ${product?.variant?.discountPrice}
-                        </Text>
-                      )}
-                    </InlineStack>
-                    <InlineStack spacing='extraTight'>
-                      <Icon source='discount' appearance='success' />
-                      <Text appearance='success' emphasis='bold'>
-                        Save 10%
-                      </Text>
-                    </InlineStack>
+                    <Text size='small'>
+                      {product?.priceRangeV2?.maxVariantPrice?.amount ===
+                      product?.priceRangeV2?.minVariantPrice?.amount
+                        ? formatCurrency(
+                            product?.priceRangeV2?.minVariantPrice
+                              ?.currencyCode,
+                            product?.priceRangeV2?.minVariantPrice?.amount
+                          )
+                        : `Start from ${formatCurrency(
+                            product?.priceRangeV2?.minVariantPrice
+                              ?.currencyCode,
+                            product?.priceRangeV2?.minVariantPrice?.amount
+                          )}`}
+                    </Text>
                   </BlockStack>
                 </InlineStack>
                 <Button
@@ -2174,97 +2191,49 @@ const SwitchProduct = ({
   order_id,
   shopUrl
 }) => {
+  const { ui } = useApi()
   const [loadMore, setLoadMore] = useState(4)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [buttonText, setButtonText] = useState('Save')
+  const [addToCartButtonText, setAddToCartButtonText] = useState('Add to cart')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const [selectedImageSource, setSelectedImageSource] = useState(
-    'https://cdn.shopify.com/s/files/1/0711/2173/1816/files/44694ee386818f3276566210464cf341.jpg?v=1731948240'
-  )
+  const [selectedImageSource, setSelectedImageSource] = useState()
+  const [selectedVariant, setSelectedVariant] = useState('')
+  const [selectedProduct, setSelectedProduct] = useState(null)
+  const [isProductLoading, setIsProductLoading] = useState(false)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [allProductData, setAllProductData] = useState([])
+  const [singleProduct, setSingleProduct] = useState({})
+  const [quantity, setQuantity] = useState(1)
 
-  const products = [
-    {
-      id: '123',
-      image:
-        'https://cdn.shopify.com/s/files/1/0711/0249/6991/files/Main_0a40b01b-5021-48c1-80d1-aa8ab4876d3d.jpg?v=1720981400',
-      title: 'The Collection Snowboard: Hydrogen',
-      quantity: '1',
-      variant: {
-        title: 'medium / black / large',
-        price: '200'
+  const deduplicateProducts = (products) => {
+    const seen = new Set()
+    return products.filter((product) => {
+      if (seen.has(product.id)) {
+        return false
       }
-    },
-    {
-      id: '124',
-      image:
-        'https://cdn.shopify.com/s/files/1/0711/0249/6991/files/Main_0a40b01b-5021-48c1-80d1-aa8ab4876d3d.jpg?v=1720981400',
-      title: 'The Collection Snowboard: Hydrogen',
-      quantity: '1',
-      variant: {
-        title: 'medium / black / large',
-        price: '200'
-      }
-    },
-    {
-      id: '125',
-      image:
-        'https://cdn.shopify.com/s/files/1/0711/0249/6991/files/Main_0a40b01b-5021-48c1-80d1-aa8ab4876d3d.jpg?v=1720981400',
-      title: 'The Collection Snowboard: Hydrogen',
-      quantity: '1',
-      variant: {
-        title: 'medium / black / large',
-        price: '200'
-      }
-    },
-    {
-      id: '126',
-      image:
-        'https://cdn.shopify.com/s/files/1/0711/0249/6991/files/Main_0a40b01b-5021-48c1-80d1-aa8ab4876d3d.jpg?v=1720981400',
-      title: 'The Collection Snowboard: Hydrogen',
-      quantity: '1',
-      variant: {
-        title: 'medium / black / large',
-        price: '200'
-      }
-    },
-    {
-      id: '127',
-      image:
-        'https://cdn.shopify.com/s/files/1/0711/0249/6991/files/Main_0a40b01b-5021-48c1-80d1-aa8ab4876d3d.jpg?v=1720981400',
-      title: 'The Collection Snowboard: Hydrogen',
-      quantity: '1',
-      variant: {
-        title: 'medium / black / large',
-        price: '200'
-      }
-    },
-    {
-      id: '128',
-      image:
-        'https://cdn.shopify.com/s/files/1/0711/0249/6991/files/Main_0a40b01b-5021-48c1-80d1-aa8ab4876d3d.jpg?v=1720981400',
-      title: 'The Collection Snowboard: Hydrogen',
-      quantity: '1',
-      variant: {
-        title: 'medium / black / large',
-        price: '200'
-      }
-    }
-  ]
+      seen.add(product.id)
+      return true
+    })
+  }
+  // Only derive singleProductVariant when singleProduct is defined and has variants
+  const singleProductVariant =
+    singleProduct?.variants?.nodes?.map((variant) => ({
+      value: variant.id,
+      label: variant.title
+    })) || []
 
   const handleViewMore = () => {
     setLoadMore((prevCount) => prevCount + 4)
   }
-  const [hoveredProductId, setHoveredProductId] = useState(null)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-
   const [isProductSelect, setIsProductSelect] = useState(false)
   const handleImageChange = (newSource) => {
     setSelectedImageSource(newSource)
   }
 
-  const handleSinlgeProductClick = () => {
+  const handleSinlgeProductClick = (product) => {
     setIsProductSelect(true)
+    setSingleProduct(product)
   }
 
   const handleBack = () => {
@@ -2275,8 +2244,137 @@ const SwitchProduct = ({
     .filter((item) => item?.node?.currentQuantity > 0)
     .slice(0, loadMore)
 
-  const handleProductData = (id) => {
-    console.log(id)
+  // Function to handle selecting or deselecting a product to switch
+  const handleProductSelect = (product) => {
+    if (selectedProduct?.id === product?.id) {
+      setSelectedProduct(null)
+    } else {
+      setSelectedProduct(product)
+    }
+  }
+
+  const handleAddToCart = async () => {
+    if (!selectedProduct || !selectedVariant) return
+
+    setIsSubmitting(true)
+
+    const payload = {
+      order_id: order_id,
+      shop_url: shopUrl,
+      variant_id: selectedVariant,
+      quantity: quantity,
+      line_item_id: selectedProduct?.id
+    }
+
+    try {
+      const response = await fetch(
+        'https://order-editing-staging.cleversity.com/api/storefront/switch-product',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`)
+      }
+
+      const data = await response.json()
+
+      // Handle the success response
+      setSuccess('Product added to cart successfully!')
+      setAddToCartButtonText('Added')
+      ui.forceDataRefresh('Product switch has been successfully!')
+    } catch (err) {
+      setError('Failed to add product to cart. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleVariantSelect = (variantId) => {
+    setSelectedVariant(variantId)
+  }
+
+  const handleQuantityChange = (newQuantity) => {
+    setQuantity(newQuantity)
+  }
+
+  const getAllProduct = async (cursor = null, isLoadMore = false) => {
+    if (isLoadMore) {
+      setIsLoadingMore(true)
+    } else {
+      setIsProductLoading(true)
+    }
+    setError('')
+
+    try {
+      const response = await fetch(
+        `https://order-editing-staging.cleversity.com/api/storefront/get-all-product?cursor=${
+          cursor || ''
+        }&limit=6&shop_url=${shopUrl}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`)
+      }
+
+      const data = await response.json()
+
+      // Deduplicate products before updating state
+      setAllProductData((prevState) => ({
+        nodes: deduplicateProducts([
+          ...(prevState.nodes || []),
+          ...(data?.data?.nodes || [])
+        ]),
+        pageInfo: data?.data?.pageInfo || {}
+      }))
+    } catch (err) {
+      setError(err.message || 'Failed to fetch products.')
+    } finally {
+      if (isLoadMore) {
+        setIsLoadingMore(false)
+      } else {
+        setIsProductLoading(false) // Reset loading state
+      }
+    }
+  }
+
+  useEffect(() => {
+    getAllProduct()
+  }, [isLoading])
+
+  useEffect(() => {
+    if (singleProduct?.featuredMedia?.preview?.image?.url) {
+      setSelectedImageSource(
+        `${singleProduct?.featuredMedia?.preview?.image?.url}`
+      )
+    }
+
+    // Set the default selectedVariant if variants are available
+    if (
+      singleProduct?.variants?.nodes &&
+      singleProduct.variants.nodes.length > 0
+    ) {
+      setSelectedVariant(singleProduct.variants.nodes[0].id) // Default to first variant
+    }
+  }, [singleProduct])
+
+  // Function to load more products
+  const loadMoreProducts = async () => {
+    const nextCursor = allProductData?.pageInfo?.endCursor
+    if (allProductData?.pageInfo?.hasNextPage && nextCursor) {
+      await getAllProduct(nextCursor, true)
+    }
   }
 
   return (
@@ -2318,7 +2416,8 @@ const SwitchProduct = ({
                   </BlockStack>
                 </InlineStack>
                 <Button
-                  onPress={() => handleProductData(product?.node?.id)}
+                  onPress={() => handleProductSelect(product.node)}
+                  appearance={'critical'}
                   overlay={
                     <Modal
                       padding
@@ -2328,143 +2427,85 @@ const SwitchProduct = ({
                       {isProductSelect ? (
                         <InlineLayout columns={['fill', 'fill']} spacing='base'>
                           <BlockStack>
-                            <Image source={selectedImageSource} />
-                            <InlineLayout spacing='tight'>
-                              <Pressable
-                                onPress={() =>
-                                  handleImageChange(
-                                    'https://cdn.shopify.com/s/files/1/0711/2173/1816/files/44694ee386818f3276566210464cf341.jpg?v=1731948240'
-                                  )
-                                }>
-                                <Image
-                                  cornerRadius='base'
-                                  border='base'
-                                  source='https://cdn.shopify.com/s/files/1/0711/2173/1816/files/44694ee386818f3276566210464cf341.jpg?v=1731948240'
-                                />
-                              </Pressable>
-                              <Pressable
-                                onPress={() =>
-                                  handleImageChange(
-                                    'https://shopninja-optimarko.myshopify.com/cdn/shop/files/6eb0aa9fdb271e5954b2f0d09a0640e4.jpg?v=1731948241&width=823'
-                                  )
-                                }>
-                                <Image
-                                  cornerRadius='base'
-                                  border='base'
-                                  source='https://shopninja-optimarko.myshopify.com/cdn/shop/files/6eb0aa9fdb271e5954b2f0d09a0640e4.jpg?v=1731948241&width=823'
-                                />
-                              </Pressable>
-                              <Pressable
-                                onPress={() =>
-                                  handleImageChange(
-                                    'https://shopninja-optimarko.myshopify.com/cdn/shop/files/015219de8a5be46a3b0a7b9089112d74.jpg?v=1731948241&width=823'
-                                  )
-                                }>
-                                <Image
-                                  cornerRadius='base'
-                                  border='base'
-                                  source='https://shopninja-optimarko.myshopify.com/cdn/shop/files/015219de8a5be46a3b0a7b9089112d74.jpg?v=1731948241&width=823'
-                                />
-                              </Pressable>
-                              <Pressable
-                                onPress={() =>
-                                  handleImageChange(
-                                    'https://shopninja-optimarko.myshopify.com/cdn/shop/files/e8490702c423e6c62d356cace500822f.jpg?v=1731948241&width=823'
-                                  )
-                                }>
-                                <Image
-                                  cornerRadius='base'
-                                  border='base'
-                                  source='https://shopninja-optimarko.myshopify.com/cdn/shop/files/e8490702c423e6c62d356cace500822f.jpg?v=1731948241&width=823'
-                                />
-                              </Pressable>
-                            </InlineLayout>
+                            <Image
+                              loading='eager'
+                              source={selectedImageSource}
+                            />
+                            <InlineStack spacing='tight'>
+                              {singleProduct?.media?.nodes?.map(
+                                (item, index) => (
+                                  <Pressable
+                                    key={index}
+                                    onPress={() =>
+                                      handleImageChange(
+                                        `${item?.preview?.image?.url}`
+                                      )
+                                    }>
+                                    <ProductThumbnail
+                                      cornerRadius='base'
+                                      border='base'
+                                      source={item?.preview?.image?.url}
+                                    />
+                                  </Pressable>
+                                )
+                              )}
+                            </InlineStack>
                           </BlockStack>
 
                           <BlockStack>
                             <BlockStack spacing='base'>
                               <Heading level='1'>
-                                Selling Plans Ski Wax Selling Plans Ski Wax
-                                Selling Plans Ski Wax
+                                {singleProduct?.title}
                               </Heading>
                               <InlineStack>
-                                <Text
-                                  size='medium'
-                                  accessibilityRole='deletion'>
-                                  $9.95
-                                </Text>
                                 <Text size='medium' appearance='critical'>
-                                  $8.96
+                                  {(() => {
+                                    const selectedVariantData =
+                                      singleProduct?.variants?.nodes?.find(
+                                        (variant) =>
+                                          variant.id === selectedVariant
+                                      )
+
+                                    if (!selectedVariantData)
+                                      return 'Price unavailable'
+
+                                    const priceInfo =
+                                      selectedVariantData?.presentmentPrices
+                                        ?.nodes[0]?.price
+                                    if (!priceInfo) return 'Price unavailable'
+
+                                    const { currencyCode, amount } = priceInfo
+                                    return formatCurrency(currencyCode, amount)
+                                  })()}
                                 </Text>
                               </InlineStack>
-                              <BlockStack spacing='0'>
-                                <Text>Size</Text>
-                                <Select
-                                  label='Select size'
-                                  value='2'
-                                  options={[
-                                    {
-                                      value: '1',
-                                      label: '1'
-                                    },
-                                    {
-                                      value: '2',
-                                      label: '2'
-                                    },
-                                    {
-                                      value: '3',
-                                      label: '3'
-                                    },
-                                    {
-                                      value: '4',
-                                      label: '4'
-                                    },
-                                    {
-                                      value: '5',
-                                      label: '5'
-                                    },
-                                    {
-                                      value: '6',
-                                      label: '6'
-                                    }
-                                  ]}
-                                />
-                              </BlockStack>
-                              <BlockStack spacing='0'>
-                                <Text>Color</Text>
-                                <Select
-                                  label='Select Color'
-                                  value='2'
-                                  options={[
-                                    {
-                                      value: '1',
-                                      label: 'Black'
-                                    },
-                                    {
-                                      value: '2',
-                                      label: 'Red'
-                                    },
-                                    {
-                                      value: '3',
-                                      label: 'Yellow'
-                                    },
-                                    {
-                                      value: '4',
-                                      label: 'Purple'
-                                    }
-                                  ]}
-                                />
-                              </BlockStack>
+                              <Select
+                                label='Size/Variant'
+                                value={selectedVariant}
+                                options={singleProductVariant}
+                                onChange={(value) => handleVariantSelect(value)}
+                              />
+                              <Stepper
+                                label='Quantity'
+                                value={quantity}
+                                min={1}
+                                onChange={handleQuantityChange}
+                              />
                             </BlockStack>
-                            <BlockStack>
-                              <Stepper label='Quantity' value={1} />
+                            <BlockStack padding='none'>
                               <Button
-                                onPress={() => {
-                                  console.log('onPress event')
-                                }}>
-                                Add to cart
+                                onPress={handleAddToCart}
+                                size='small'
+                                disabled={isSubmitting}>
+                                {isSubmitting ? (
+                                  <Spinner />
+                                ) : (
+                                  addToCartButtonText
+                                )}
                               </Button>
-                              <Button onPress={handleBack}>Back</Button>
+                              <Button onPress={handleBack} size='small'>
+                                Back
+                              </Button>
                             </BlockStack>
                           </BlockStack>
                         </InlineLayout>
@@ -2476,72 +2517,89 @@ const SwitchProduct = ({
                               label='Search for product'
                               icon={{ source: 'magnify' }}
                             />
-                            <ScrollView maxBlockSize={400}>
-                              <BlockStack overflow='hidden' padding='tight'>
-                                {products.map((product) => (
-                                  <Pressable
-                                    onPress={handleSinlgeProductClick}
-                                    key={product.id}
-                                    onPointerEnter={() =>
-                                      setHoveredProductId(product.id)
-                                    }
-                                    onPointerLeave={() =>
-                                      setHoveredProductId(null)
-                                    }
-                                    background={
-                                      hoveredProductId === product.id
-                                        ? 'subdued'
-                                        : 'transparent'
-                                    }
-                                    cornerRadius='base'>
-                                    <InlineLayout
-                                      columns={['fill', '30%']}
-                                      spacing='base'
-                                      padding='base'>
-                                      <InlineStack
-                                        blockAlignment='center'
-                                        spacing='extraTight'>
-                                        <ProductThumbnail
-                                          size='base'
-                                          source={product?.image}
-                                        />
-                                        <BlockStack spacing='none'>
-                                          <Text size='base'>
-                                            {product?.title}
-                                          </Text>
-                                          <Text size='small'>
-                                            {product?.variant?.title}
-                                          </Text>
-                                          <Text size='small'>
-                                            Price: ${product?.variant?.price}
-                                          </Text>
-                                        </BlockStack>
-                                      </InlineStack>
-
-                                      <ToggleButtonGroup>
-                                        <InlineLayout>
-                                          <ToggleButton id='222'>
-                                            <View inlineAlignment='center'>
-                                              View
-                                            </View>
-                                          </ToggleButton>
-                                        </InlineLayout>
-                                      </ToggleButtonGroup>
-                                    </InlineLayout>
-                                  </Pressable>
-                                ))}
-                              </BlockStack>
-                            </ScrollView>
-                          </BlockStack>
-
-                          {/* Sticky Footer */}
-                          <Button accessibilityRole='submit'>
-                            {isSubmitting ? (
-                              <Spinner appearance='subdued' />
+                            {isProductLoading ? (
+                              <BlockLayout
+                                rows={[200]}
+                                blockAlignment='center'
+                                inlineAlignment='center'>
+                                <Spinner />
+                              </BlockLayout>
                             ) : (
-                              buttonText
+                              <ScrollView
+                                maxBlockSize={500}
+                                onScrolledToEdge={({ scrolledTo }) => {
+                                  if (scrolledTo.block == 'end') {
+                                    loadMoreProducts() // Trigger fetching more products
+                                  }
+                                }}>
+                                <BlockStack overflow='hidden' padding='tight'>
+                                  {allProductData?.nodes
+                                    ?.filter((product) => !product.isGiftCard)
+                                    .map((product) => (
+                                      <InlineLayout
+                                        key={product.id}
+                                        columns={['fill', '30%']}
+                                        spacing='base'
+                                        padding='base'>
+                                        <InlineStack
+                                          blockAlignment='center'
+                                          spacing='extraTight'>
+                                          <ProductThumbnail
+                                            size='base'
+                                            source={
+                                              product?.featuredMedia?.preview
+                                                ?.image?.url
+                                            }
+                                          />
+                                          <BlockStack spacing='none'>
+                                            <Text size='base'>
+                                              {product?.title}
+                                            </Text>
+                                            <Text size='small'>
+                                              {product?.priceRangeV2
+                                                ?.maxVariantPrice?.amount ===
+                                              product?.priceRangeV2
+                                                ?.minVariantPrice?.amount
+                                                ? formatCurrency(
+                                                    product?.priceRangeV2
+                                                      ?.minVariantPrice
+                                                      ?.currencyCode,
+                                                    product?.priceRangeV2
+                                                      ?.minVariantPrice?.amount
+                                                  )
+                                                : `Start from ${formatCurrency(
+                                                    product?.priceRangeV2
+                                                      ?.minVariantPrice
+                                                      ?.currencyCode,
+                                                    product?.priceRangeV2
+                                                      ?.minVariantPrice?.amount
+                                                  )}`}
+                                            </Text>
+                                          </BlockStack>
+                                        </InlineStack>
+
+                                        <Link
+                                          onPress={() =>
+                                            handleSinlgeProductClick(product)
+                                          }>
+                                          View Details
+                                        </Link>
+                                      </InlineLayout>
+                                    ))}
+                                </BlockStack>
+                                {isLoadingMore && (
+                                  <BlockStack spacing={0} padding={'base'}>
+                                    {Array.from({ length: 1 }).map((_, i) => (
+                                      <SkeletonTextBlock
+                                        key={i}
+                                        size='extraLarge'
+                                      />
+                                    ))}
+                                  </BlockStack>
+                                )}
+                              </ScrollView>
                             )}
-                          </Button>
+                          </BlockStack>
                         </BlockStack>
                       )}
                     </Modal>
