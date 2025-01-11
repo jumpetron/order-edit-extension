@@ -37,7 +37,9 @@ import {
   SkeletonTextBlock,
   Spinner,
   SkeletonImage,
-  SkeletonText
+  SkeletonText,
+  BlockSpacer,
+  Style
 } from '@shopify/ui-extensions-react/customer-account'
 import { useEffect, useState } from 'react'
 import { countries, provinces, taxIdCountries } from './lib/countries'
@@ -56,7 +58,13 @@ function Extension() {
   const [error, setError] = useState(null)
   const [loadingState, setLoadingState] = useState({})
   const [defaultData, setDefaultData] = useState({})
-
+  const [orderSummeryData, setOrderSummeryData] = useState([])
+  const [isOrderSummeryLoading, setOrderSummeryLoading] = useState(false)
+  const [orderSummeryError, setOrderSummeryError] = useState(null)
+  const [shippingMethodData, setShippingMethodData] = useState(null)
+  const [isShippingMethodDataLoading, setIsShippingMethodDataLoading] =
+    useState(false)
+  const [shippingMethodDataError, setShippingMethodDataError] = useState(null)
   const { shop, order, buyerIdentity } = useApi()
   const order_id = order?.current?.id
   const orderName = order?.current?.name
@@ -174,153 +182,391 @@ function Extension() {
       setLoadingState((prev) => ({ ...prev, [slug]: false }))
     }
   }
-  console.log(settings)
+
+  useEffect(() => {
+    const fetchOrderSummeryData = async () => {
+      const sanitizedOrderName = orderName.replace('#', '')
+      setOrderSummeryLoading(true)
+      setOrderSummeryError(null)
+
+      try {
+        const response = await fetch(
+          `https://order-editing-staging.cleversity.com/api/storefront/order-summary?shop_url=${shopUrl}&order_name=${sanitizedOrderName}`,
+          {
+            method: 'GET',
+            headers: prepareHeaders(new Headers())
+          }
+        )
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+        const data = await response.json()
+        setOrderSummeryData(data)
+      } catch (err) {
+        setOrderSummeryError(err.message)
+      } finally {
+        setOrderSummeryLoading(false)
+      }
+    }
+
+    fetchOrderSummeryData()
+  }, [orderName, shopUrl])
+
+  useEffect(() => {
+    const fetchShippingMethodData = async () => {
+      const sanitizedOrderName = orderName.replace('#', '')
+      setIsShippingMethodDataLoading(true)
+
+      try {
+        const response = await fetch(
+          `https://order-editing-staging.cleversity.com/api/storefront/process-order-edit?order_name=${sanitizedOrderName}&shop_url=${shopUrl}&slug=upgrade_shipping_method`,
+          {
+            method: 'GET',
+            headers: prepareHeaders(new Headers())
+          }
+        )
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+
+        const data = await response.json()
+        setShippingMethodData(data)
+      } catch (err) {
+        setShippingMethodDataError(err.message)
+      } finally {
+        setIsShippingMethodDataLoading(false)
+      }
+    }
+
+    // Extract shippingLines for clarity and better dependency tracking
+    const shippingLines =
+      orderSummeryData?.data?.orders?.edges?.[0]?.node?.shippingLines?.nodes
+
+    // Trigger API call only if shippingLines is non-empty
+    if (Array.isArray(shippingLines) && shippingLines.length > 0) {
+      fetchShippingMethodData()
+    }
+  }, [
+    JSON.stringify(
+      orderSummeryData?.data?.orders?.edges?.[0]?.node?.shippingLines?.nodes
+    ), // Use a serialized value to detect changes reliably
+    orderName,
+    shopUrl
+  ])
+
+  console.log(orderSummeryData?.data?.orders?.edges[0]?.node)
+  console.log(shippingMethodData)
   return (
-    <View
-      cornerRadius='large'
-      border={'base'}
-      padding={['base', 'base', 'base', 'base']}>
-      <BlockStack spacing='none'>
-        <BlockStack padding={['base', 'base', 'base', 'base']}>
-          <Heading level={1}>Edit Order</Heading>
-          <Divider />
+    <View spacing='base'>
+      {isOrderSummeryLoading ? (
+        <BlockStack spacing={'base'}>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <SkeletonTextBlock key={i} size='extraLarge' />
+          ))}
         </BlockStack>
-        {loading ? (
-          <BlockStack spacing={'base'}>
-            {Array.from({ length: 5 }).map((_, i) => (
-              <SkeletonTextBlock key={i} size='extraLarge' />
-            ))}
-          </BlockStack>
-        ) : (
-          settings?.data?.menus?.map((option) => (
-            <Disclosure
-              key={option?.id}
-              onToggle={(open) => handleDisclosure(open)}>
-              <Pressable
-                toggles={option?.slug}
-                padding='base'
-                onPress={() => handleDefaultData(option?.slug)}>
+      ) : (
+        <View
+          padding={['base', 'base', 'base', 'base']}
+          cornerRadius='large'
+          border='base'>
+          <BlockStack>
+            <BlockStack spacing='base'>
+              <TextBlock appearance='subdued' emphasis='bold'>
+                You have a remaining balance left to pay on your order. If you
+                don't pay before the editing deadline, we'll reverse your edits.
+              </TextBlock>
+              <Button>Undo</Button>
+            </BlockStack>
+            <Divider />
+            <BlockStack padding='base' spacing='base'>
+              {orderSummeryData?.data?.orders?.edges[0]?.node?.lineItems?.edges
+                ?.filter((item) => item?.node?.currentQuantity > 0) // Filter out items with quantity 0
+                ?.map((item) => {
+                  const unitPrice =
+                    item?.node?.discountedUnitPriceAfterAllDiscountsSet
+                      ?.shopMoney?.amount
+                  const currencyCode =
+                    item?.node?.discountedUnitPriceAfterAllDiscountsSet
+                      ?.shopMoney?.currencyCode
+                  const totalPrice = unitPrice * item?.node?.currentQuantity
+
+                  return (
+                    <InlineLayout
+                      key={item.node?.id}
+                      blockAlignment='center'
+                      spacing='base'
+                      columns={['fill', '30%']}>
+                      <InlineLayout columns={['auto', 'fill']} spacing='base'>
+                        <ProductThumbnail
+                          size='base'
+                          source={item?.node?.image?.url}
+                          badge={item?.node?.currentQuantity}
+                        />
+                        <BlockStack spacing='none'>
+                          <Text size='base' emphasis='bold'>
+                            {item?.node?.title}
+                          </Text>
+                          <Text size='small'>{item?.node?.variantTitle}</Text>
+                          <Text size='small'>
+                            {formatCurrency(
+                              item?.node
+                                ?.discountedUnitPriceAfterAllDiscountsSet
+                                ?.shopMoney?.currencyCode,
+                              item?.node
+                                ?.discountedUnitPriceAfterAllDiscountsSet
+                                ?.shopMoney?.amount
+                            )}{' '}
+                            x {item?.node?.currentQuantity}
+                          </Text>
+                        </BlockStack>
+                      </InlineLayout>
+                      <BlockStack spacing='0' inlineAlignment='end'>
+                        <Text>{formatCurrency(currencyCode, totalPrice)}</Text>
+                        <Link>Remove</Link>
+                      </BlockStack>
+                    </InlineLayout>
+                  )
+                })}
+            </BlockStack>
+
+            <Disclosure onToggle={(open) => handleDisclosure(open)}>
+              <Pressable toggles={'sub_total'}>
                 <InlineLayout
-                  blockAlignment='center'
+                  columns={['fill', 'auto']}
                   spacing='base'
-                  columns={['auto', 'fill', 'auto']}>
-                  <Icon source={option.icon} appearance='monochrome' />
-                  <Heading>{option.name}</Heading>
-                  <Icon
-                    source={openId.includes(option?.slug) ? 'minus' : 'plus'}
-                    appearance='monochrome'
-                  />
+                  blockAlignment='center'>
+                  <InlineLayout columns={['fill', 'auto']}>
+                    <Text>Subtotal</Text>
+                    <Text>
+                      {
+                        orderSummeryData?.data?.orders?.edges[0]?.node
+                          ?.currentSubtotalPriceSet?.presentmentMoney
+                          ?.currencyCode
+                      }{' '}
+                      {
+                        orderSummeryData?.data?.orders?.edges[0]?.node
+                          ?.currentSubtotalPriceSet?.presentmentMoney?.amount
+                      }
+                    </Text>
+                  </InlineLayout>
+                  <Icon source='chevronDown' size='small' />
                 </InlineLayout>
               </Pressable>
-              {option?.slug == 'shipping_address' && (
-                <ShippingAddress
-                  shopUrl={shopUrl}
-                  order_id={order_id}
-                  defaultData={defaultData['shipping_address']}
-                  isLoading={loadingState['shipping_address']}
-                  optionName={option?.slug}
-                />
-              )}
-              {option?.slug == 'change_contact_info' && (
-                <ContactInformation
-                  shopUrl={shopUrl}
-                  order_id={order_id}
-                  defaultData={defaultData['change_contact_info']}
-                  isLoading={loadingState['change_contact_info']}
-                  optionName={option?.slug}
-                />
-              )}
-              {option?.slug == 'change_product_quantities' && (
-                <ChangeProductQuantities
-                  shopUrl={shopUrl}
-                  order_id={order_id}
-                  defaultData={defaultData['change_product_quantities']}
-                  isLoading={loadingState['change_product_quantities']}
-                  optionName={option?.slug}
-                />
-              )}
-              {option?.slug == 'upgrade_shipping_method' && (
-                <UpgradeShippingMethod
-                  defaultData={defaultData['upgrade_shipping_method']}
-                  isLoading={loadingState['upgrade_shipping_method']}
-                  optionName={option?.slug}
-                />
-              )}
-              {option?.slug == 'request_order_cancel' && (
-                <CancelOrder
-                  orderName={orderName}
-                  shopUrl={shopUrl}
-                  order_id={order_id}
-                  defaultData={defaultData['request_order_cancel']}
-                  isLoading={loadingState['request_order_cancel']}
-                  optionName={option?.slug}
-                />
-              )}
-              {option?.slug == 'download_invoice' && (
-                <DownloadInvoice
-                  shopUrl={shopUrl}
-                  order_id={order_id}
-                  defaultData={defaultData['download_invoice']}
-                  isLoading={loadingState['download_invoice']}
-                  optionName={option?.slug}
-                />
-              )}
-              {option?.slug == 'edit_gift_message' && (
-                <EditGiftMessage
-                  shopUrl={shopUrl}
-                  order_id={order_id}
-                  defaultData={defaultData['edit_gift_message']}
-                  isLoading={loadingState['edit_gift_message']}
-                  optionName={option?.slug}
-                />
-              )}
-              {option?.slug == 'change_payment_method' && (
-                <ChangePaymentMethod
-                  defaultData={defaultData['change_payment_method']}
-                  isLoading={loadingState['change_payment_method']}
-                  optionName={option?.slug}
-                />
-              )}
-              {option?.slug == 'add_another_product' && (
-                <AddAnotherProduct
-                  handleDefaultData={handleDefaultData}
-                  defaultData={defaultData['add_another_product']}
-                  isLoading={loadingState['add_another_product']}
-                  optionName={option?.slug}
-                />
-              )}
-              {option?.slug == 'change_size_variant' && (
-                <ChangeProductSizeAndVariant
-                  shopUrl={shopUrl}
-                  order_id={order_id}
-                  defaultData={defaultData['change_size_variant']}
-                  isLoading={loadingState['change_size_variant']}
-                  optionName={option?.slug}
-                />
-              )}
-              {option?.slug == 'switch_product' && (
-                <SwitchProduct
-                  shopUrl={shopUrl}
-                  order_id={order_id}
-                  defaultData={defaultData['switch_product']}
-                  isLoading={loadingState['switch_product']}
-                  optionName={option?.slug}
-                />
-              )}
-              {option?.slug == 'contact_customer_support' && (
-                <ContactCustomerSupport
-                  orderName={orderName}
-                  shopUrl={shopUrl}
-                  order_id={order_id}
-                  defaultData={defaultData['contact_customer_support']}
-                  isLoading={loadingState['contact_customer_support']}
-                  optionName={option?.slug}
-                />
-              )}
+
+              <BlockStack spacing='extraTight' id='sub_total'>
+                {orderSummeryData?.data?.orders?.edges[0]?.node?.lineItems?.edges
+                  ?.filter((item) => item?.node?.currentQuantity > 0)
+                  ?.map((item) => {
+                    const unitPrice =
+                      item?.node?.discountedUnitPriceAfterAllDiscountsSet
+                        ?.shopMoney?.amount
+                    const currencyCode =
+                      item?.node?.discountedUnitPriceAfterAllDiscountsSet
+                        ?.shopMoney?.currencyCode
+                    const totalPrice = unitPrice * item?.node?.currentQuantity
+                    return (
+                      <InlineLayout
+                        spacing='base'
+                        key={item.node?.id}
+                        columns={['fill', 'auto']}>
+                        <BlockStack spacing='0'>
+                          <Text size='small' appearance='subdued'>
+                            {item?.node?.currentQuantity}x {item?.node?.title}
+                          </Text>
+                          <Text size='small' appearance='subdued'>
+                            {item?.node?.variantTitle}
+                          </Text>
+                        </BlockStack>
+                        <Text size='small' appearance='subdued'>
+                          {formatCurrency(currencyCode, totalPrice)}
+                        </Text>
+                      </InlineLayout>
+                    )
+                  })}
+              </BlockStack>
             </Disclosure>
-          ))
-        )}
-      </BlockStack>
+            <Disclosure onToggle={(open) => handleDisclosure(open)}>
+              <Pressable toggles={'shipping_method'}>
+                <InlineLayout
+                  columns={['fill', 'auto']}
+                  spacing='base'
+                  blockAlignment='center'>
+                  <InlineLayout columns={['fill', 'auto']}>
+                    <Text>Shipping</Text>
+                    <Text>100</Text>
+                  </InlineLayout>
+                  <Icon source='chevronDown' size='small' />
+                </InlineLayout>
+              </Pressable>
+
+              <BlockStack spacing='extraTight' id='shipping_method'>
+                <ChoiceList
+                  name='ship'
+                  value='ship-1'
+                  onChange={(value) => {
+                    console.log(`onChange event with value: ${value}`)
+                  }}>
+                  <Choice id='ship-1' secondaryContent={`USD`}>
+                    Ship
+                  </Choice>
+                  <Choice id='ship-2' secondaryContent={`USD`}>
+                    Ship
+                  </Choice>
+                </ChoiceList>
+              </BlockStack>
+            </Disclosure>
+          </BlockStack>
+        </View>
+      )}
+
+      <BlockSpacer spacing='base' />
+      <View
+        cornerRadius='large'
+        border={'base'}
+        padding={['base', 'base', 'base', 'base']}>
+        <BlockStack spacing='none'>
+          <BlockStack padding={['base', 'base', 'base', 'base']}>
+            <Heading level={1}>Edit Order</Heading>
+            <Divider />
+          </BlockStack>
+          {loading ? (
+            <BlockStack spacing={'base'}>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <SkeletonTextBlock key={i} size='extraLarge' />
+              ))}
+            </BlockStack>
+          ) : (
+            settings?.data?.menus?.map((option) => (
+              <Disclosure
+                key={option?.id}
+                onToggle={(open) => handleDisclosure(open)}>
+                <Pressable
+                  toggles={option?.slug}
+                  padding='base'
+                  onPress={() => handleDefaultData(option?.slug)}>
+                  <InlineLayout
+                    blockAlignment='center'
+                    spacing='base'
+                    columns={['auto', 'fill', 'auto']}>
+                    <Icon source={option.icon} appearance='monochrome' />
+                    <Heading>{option.name}</Heading>
+                    <Icon
+                      source={openId.includes(option?.slug) ? 'minus' : 'plus'}
+                      appearance='monochrome'
+                    />
+                  </InlineLayout>
+                </Pressable>
+                {option?.slug == 'shipping_address' && (
+                  <ShippingAddress
+                    shopUrl={shopUrl}
+                    order_id={order_id}
+                    defaultData={defaultData['shipping_address']}
+                    isLoading={loadingState['shipping_address']}
+                    optionName={option?.slug}
+                  />
+                )}
+                {option?.slug == 'change_contact_info' && (
+                  <ContactInformation
+                    shopUrl={shopUrl}
+                    order_id={order_id}
+                    defaultData={defaultData['change_contact_info']}
+                    isLoading={loadingState['change_contact_info']}
+                    optionName={option?.slug}
+                  />
+                )}
+                {option?.slug == 'change_product_quantities' && (
+                  <ChangeProductQuantities
+                    shopUrl={shopUrl}
+                    order_id={order_id}
+                    defaultData={defaultData['change_product_quantities']}
+                    isLoading={loadingState['change_product_quantities']}
+                    optionName={option?.slug}
+                  />
+                )}
+                {option?.slug == 'upgrade_shipping_method' && (
+                  <UpgradeShippingMethod
+                    defaultData={defaultData['upgrade_shipping_method']}
+                    isLoading={loadingState['upgrade_shipping_method']}
+                    optionName={option?.slug}
+                  />
+                )}
+                {option?.slug == 'request_order_cancel' && (
+                  <CancelOrder
+                    orderName={orderName}
+                    shopUrl={shopUrl}
+                    order_id={order_id}
+                    defaultData={defaultData['request_order_cancel']}
+                    isLoading={loadingState['request_order_cancel']}
+                    optionName={option?.slug}
+                  />
+                )}
+                {option?.slug == 'download_invoice' && (
+                  <DownloadInvoice
+                    shopUrl={shopUrl}
+                    order_id={order_id}
+                    defaultData={defaultData['download_invoice']}
+                    isLoading={loadingState['download_invoice']}
+                    optionName={option?.slug}
+                  />
+                )}
+                {option?.slug == 'edit_gift_message' && (
+                  <EditGiftMessage
+                    shopUrl={shopUrl}
+                    order_id={order_id}
+                    defaultData={defaultData['edit_gift_message']}
+                    isLoading={loadingState['edit_gift_message']}
+                    optionName={option?.slug}
+                  />
+                )}
+                {option?.slug == 'change_payment_method' && (
+                  <ChangePaymentMethod
+                    defaultData={defaultData['change_payment_method']}
+                    isLoading={loadingState['change_payment_method']}
+                    optionName={option?.slug}
+                  />
+                )}
+                {option?.slug == 'add_another_product' && (
+                  <AddAnotherProduct
+                    handleDefaultData={handleDefaultData}
+                    defaultData={defaultData['add_another_product']}
+                    isLoading={loadingState['add_another_product']}
+                    optionName={option?.slug}
+                  />
+                )}
+                {option?.slug == 'change_size_variant' && (
+                  <ChangeProductSizeAndVariant
+                    shopUrl={shopUrl}
+                    order_id={order_id}
+                    defaultData={defaultData['change_size_variant']}
+                    isLoading={loadingState['change_size_variant']}
+                    optionName={option?.slug}
+                  />
+                )}
+                {option?.slug == 'switch_product' && (
+                  <SwitchProduct
+                    shopUrl={shopUrl}
+                    order_id={order_id}
+                    defaultData={defaultData['switch_product']}
+                    isLoading={loadingState['switch_product']}
+                    optionName={option?.slug}
+                  />
+                )}
+                {option?.slug == 'contact_customer_support' && (
+                  <ContactCustomerSupport
+                    orderName={orderName}
+                    shopUrl={shopUrl}
+                    order_id={order_id}
+                    defaultData={defaultData['contact_customer_support']}
+                    isLoading={loadingState['contact_customer_support']}
+                    optionName={option?.slug}
+                  />
+                )}
+              </Disclosure>
+            ))
+          )}
+        </BlockStack>
+      </View>
     </View>
   )
 }
@@ -970,7 +1216,7 @@ const ChangeProductQuantities = ({
   const productsToShow = defaultData?.data?.product?.edges
     .filter((item) => item?.node?.currentQuantity > 0) // Filter products with quantity > 0
     .slice(0, loadMore)
-
+  console.log(productsToShow)
   return (
     <View id={optionName} padding={['base', 'base', 'base', 'base']}>
       {isLoading ? (
@@ -1768,46 +2014,13 @@ const AddAnotherProduct = ({
   )
 
   const handleViewMore = () => {
-    setLoadMore((prevCount) => prevCount + 4) // Show 4 more products on each click
+    setLoadMore((prevCount) => prevCount + 4)
   }
-  const products = [
-    {
-      id: '123',
-      image:
-        'https://cdn.shopify.com/s/files/1/0711/0249/6991/files/Main_0a40b01b-5021-48c1-80d1-aa8ab4876d3d.jpg?v=1720981400',
-      title: 'The Collection Snowboard: Hydrogen',
-      variant: {
-        title: 'medium / black / large',
-        price: '200'
-      }
-    },
-    {
-      id: '124',
-      image:
-        'https://cdn.shopify.com/s/files/1/0711/0249/6991/files/Main_0a40b01b-5021-48c1-80d1-aa8ab4876d3d.jpg?v=1720981400',
-      title: 'The Collection Snowboard: Hydrogen',
-      variant: {
-        title: 'medium / black / large',
-        price: '200'
-      }
-    },
-    {
-      id: '125',
-      image:
-        'https://cdn.shopify.com/s/files/1/0711/0249/6991/files/Main_0a40b01b-5021-48c1-80d1-aa8ab4876d3d.jpg?v=1720981400',
-      title: 'The Collection Snowboard: Hydrogen',
-      variant: {
-        title: 'medium / black / large',
-        price: '200',
-        discountPrice: '150'
-      }
-    }
-  ]
 
   const productsToShow = defaultData?.products?.slice(0, loadMore)
 
   const handleImageChange = (newSource) => {
-    setSelectedImageSource(newSource) // Update the selected image source
+    setSelectedImageSource(newSource)
   }
 
   return (
