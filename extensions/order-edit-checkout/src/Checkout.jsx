@@ -39,7 +39,8 @@ import {
   SkeletonImage,
   SkeletonText,
   BlockSpacer,
-  Style
+  Style,
+  Badge
 } from '@shopify/ui-extensions-react/customer-account'
 import { useEffect, useState } from 'react'
 import { countries, provinces, taxIdCountries } from './lib/countries'
@@ -52,19 +53,20 @@ export default reactExtension(
 )
 
 function Extension() {
+  const { ui } = useApi()
   const [openId, setOpenId] = useState([])
   const [settings, setSettings] = useState({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [loadingState, setLoadingState] = useState({})
   const [defaultData, setDefaultData] = useState({})
+  const [allProduct, setAllProduct] = useState({})
   const [orderSummeryData, setOrderSummeryData] = useState([])
   const [isOrderSummeryLoading, setOrderSummeryLoading] = useState(false)
   const [orderSummeryError, setOrderSummeryError] = useState(null)
-  const [shippingMethodData, setShippingMethodData] = useState(null)
-  const [isShippingMethodDataLoading, setIsShippingMethodDataLoading] =
-    useState(false)
-  const [shippingMethodDataError, setShippingMethodDataError] = useState(null)
+  const [removeError, setRemoveError] = useState('')
+  const [removeSuccess, setRemoveSuccess] = useState('')
+  const [removing, setRemoving] = useState({})
   const { shop, order, buyerIdentity } = useApi()
   const order_id = order?.current?.id
   const orderName = order?.current?.name
@@ -111,7 +113,14 @@ function Extension() {
 
   const handleDefaultData = async (slug, cursor = null) => {
     setError(null)
-    setLoadingState((prev) => ({ ...prev, [slug]: true }))
+
+    // Set loading state to true only for the first call, not for pagination
+    if (!cursor) {
+      setLoadingState((prev) => ({
+        ...prev,
+        [slug]: true
+      }))
+    }
 
     if (slug === 'add_another_product') {
       try {
@@ -133,7 +142,7 @@ function Extension() {
 
         const { nodes: products, pageInfo } = data
 
-        setDefaultData((prev) => {
+        setAllProduct((prev) => {
           const existingProducts = prev[slug]?.products || []
           const newProducts = products.filter(
             (product) => !existingProducts.some((p) => p.id === product.id)
@@ -151,9 +160,12 @@ function Extension() {
       } catch (err) {
         setError(err.message)
       } finally {
-        setLoadingState((prev) => ({ ...prev, [slug]: false }))
+        // Set loading state to false after data is fetched
+        setLoadingState((prev) => ({
+          ...prev,
+          [slug]: false
+        }))
       }
-      return
     }
 
     // Default case for other slugs
@@ -179,7 +191,11 @@ function Extension() {
     } catch (err) {
       setError(err.message)
     } finally {
-      setLoadingState((prev) => ({ ...prev, [slug]: false }))
+      // Set loading state to false for the other slugs
+      setLoadingState((prev) => ({
+        ...prev,
+        [slug]: false
+      }))
     }
   }
 
@@ -201,7 +217,7 @@ function Extension() {
           throw new Error(`HTTP error! status: ${response.status}`)
         }
         const data = await response.json()
-        setOrderSummeryData(data)
+        setOrderSummeryData(data?.data)
       } catch (err) {
         setOrderSummeryError(err.message)
       } finally {
@@ -212,75 +228,97 @@ function Extension() {
     fetchOrderSummeryData()
   }, [orderName, shopUrl])
 
-  useEffect(() => {
-    const fetchShippingMethodData = async () => {
-      const sanitizedOrderName = orderName.replace('#', '')
-      setIsShippingMethodDataLoading(true)
+  const handleRemoveProduct = async (lineItemId) => {
+    setRemoving((prev) => ({ ...prev, [lineItemId]: true }))
+    setRemoveError('')
+    setRemoveSuccess('')
 
-      try {
-        const response = await fetch(
-          `https://order-editing-staging.cleversity.com/api/storefront/process-order-edit?order_name=${sanitizedOrderName}&shop_url=${shopUrl}&slug=upgrade_shipping_method`,
-          {
-            method: 'GET',
-            headers: prepareHeaders(new Headers())
-          }
-        )
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
-
-        const data = await response.json()
-        setShippingMethodData(data)
-      } catch (err) {
-        setShippingMethodDataError(err.message)
-      } finally {
-        setIsShippingMethodDataLoading(false)
+    try {
+      const payload = {
+        order_id,
+        shop_url: shopUrl,
+        line_item_id: lineItemId
       }
+
+      const response = await fetch(
+        'https://order-editing-staging.cleversity.com/api/storefront/remove-product',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        }
+      )
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to remove product.')
+      }
+      console.log(response)
+      setRemoveSuccess('Product removed successfully.')
+      ui.forceDataRefresh('Product removed successfully!')
+    } catch (err) {
+      setRemoveError(
+        err.message || 'An error occurred while removing the product.'
+      )
+    } finally {
+      setRemoving((prev) => ({ ...prev, [lineItemId]: false }))
     }
+  }
 
-    // Extract shippingLines for clarity and better dependency tracking
-    const shippingLines =
-      orderSummeryData?.data?.orders?.edges?.[0]?.node?.shippingLines?.nodes
-
-    // Trigger API call only if shippingLines is non-empty
-    if (Array.isArray(shippingLines) && shippingLines.length > 0) {
-      fetchShippingMethodData()
-    }
-  }, [
-    JSON.stringify(
-      orderSummeryData?.data?.orders?.edges?.[0]?.node?.shippingLines?.nodes
-    ), // Use a serialized value to detect changes reliably
-    orderName,
-    shopUrl
-  ])
-
-  console.log(orderSummeryData?.data?.orders?.edges[0]?.node)
-  console.log(shippingMethodData)
+  console.log(orderSummeryData?.orders?.edges[0]?.node?.lineItems?.edges)
   return (
     <View spacing='base'>
-      {isOrderSummeryLoading ? (
+      {orderSummeryData?.length == 0 ? (
+        ''
+      ) : isOrderSummeryLoading ? (
         <BlockStack spacing={'base'}>
           {Array.from({ length: 5 }).map((_, i) => (
             <SkeletonTextBlock key={i} size='extraLarge' />
           ))}
         </BlockStack>
       ) : (
-        <View
+        <BlockStack
+          background='base'
           padding={['base', 'base', 'base', 'base']}
           cornerRadius='large'
           border='base'>
           <BlockStack>
             <BlockStack spacing='base'>
+              <InlineLayout spacing='0' columns={['fill', '30%']}>
+                <BlockStack spacing='0'>
+                  <InlineStack spacing='extraTight' blockAlignment='baseline'>
+                    <Text size='large' emphasis='bold'>
+                      {formatCurrency(
+                        orderSummeryData?.orders?.edges[0]?.node
+                          ?.totalOutstandingSet?.presentmentMoney?.currencyCode,
+                        orderSummeryData?.orders?.edges[0]?.node
+                          ?.totalOutstandingSet?.presentmentMoney?.amount
+                      )}
+                    </Text>
+                    <Text
+                      size='extraSmall'
+                      emphasis='bold'
+                      appearance='subdued'>
+                      {
+                        orderSummeryData?.orders?.edges[0]?.node
+                          ?.totalOutstandingSet?.presentmentMoney?.currencyCode
+                      }
+                    </Text>
+                  </InlineStack>
+                  <Text size='medium' emphasis='bold' appearance='subdued'>
+                    Payment due
+                  </Text>
+                </BlockStack>
+                <Button>Undo</Button>
+              </InlineLayout>
               <TextBlock appearance='subdued' emphasis='bold'>
                 You have a remaining balance left to pay on your order. If you
                 don't pay before the editing deadline, we'll reverse your edits.
               </TextBlock>
-              <Button>Undo</Button>
             </BlockStack>
             <Divider />
             <BlockStack padding='base' spacing='base'>
-              {orderSummeryData?.data?.orders?.edges[0]?.node?.lineItems?.edges
+              {orderSummeryData?.orders?.edges[0]?.node?.lineItems?.edges
                 ?.filter((item) => item?.node?.currentQuantity > 0) // Filter out items with quantity 0
                 ?.map((item) => {
                   const unitPrice =
@@ -323,7 +361,15 @@ function Extension() {
                       </InlineLayout>
                       <BlockStack spacing='0' inlineAlignment='end'>
                         <Text>{formatCurrency(currencyCode, totalPrice)}</Text>
-                        <Link>Remove</Link>
+                        <Link
+                          onPress={() => handleRemoveProduct(item.node.id)}
+                          disabled={removing[item.node.id]}>
+                          {removing[item.node.id] ? (
+                            <Spinner appearance='subdued' />
+                          ) : (
+                            'Remove'
+                          )}
+                        </Link>
                       </BlockStack>
                     </InlineLayout>
                   )
@@ -340,12 +386,12 @@ function Extension() {
                     <Text>Subtotal</Text>
                     <Text>
                       {
-                        orderSummeryData?.data?.orders?.edges[0]?.node
+                        orderSummeryData?.orders?.edges[0]?.node
                           ?.currentSubtotalPriceSet?.presentmentMoney
                           ?.currencyCode
                       }{' '}
                       {
-                        orderSummeryData?.data?.orders?.edges[0]?.node
+                        orderSummeryData?.orders?.edges[0]?.node
                           ?.currentSubtotalPriceSet?.presentmentMoney?.amount
                       }
                     </Text>
@@ -355,7 +401,7 @@ function Extension() {
               </Pressable>
 
               <BlockStack spacing='extraTight' id='sub_total'>
-                {orderSummeryData?.data?.orders?.edges[0]?.node?.lineItems?.edges
+                {orderSummeryData?.orders?.edges[0]?.node?.lineItems?.edges
                   ?.filter((item) => item?.node?.currentQuantity > 0)
                   ?.map((item) => {
                     const unitPrice =
@@ -386,38 +432,114 @@ function Extension() {
                   })}
               </BlockStack>
             </Disclosure>
-            <Disclosure onToggle={(open) => handleDisclosure(open)}>
-              <Pressable toggles={'shipping_method'}>
-                <InlineLayout
-                  columns={['fill', 'auto']}
-                  spacing='base'
-                  blockAlignment='center'>
-                  <InlineLayout columns={['fill', 'auto']}>
-                    <Text>Shipping</Text>
-                    <Text>100</Text>
+            {orderSummeryData?.orders?.edges[0]?.node?.shippingLines?.nodes
+              ?.length === 0 ? (
+              <InlineLayout
+                columns={['fill', 'auto']}
+                spacing='base'
+                blockAlignment='center'>
+                <Text>Shipping</Text>
+                <Text>Free</Text>
+              </InlineLayout>
+            ) : (
+              <Disclosure onToggle={(open) => handleDisclosure(open)}>
+                <Pressable toggles={'shipping_method'}>
+                  <InlineLayout
+                    columns={['fill', 'auto']}
+                    spacing='base'
+                    blockAlignment='center'>
+                    <InlineLayout columns={['fill', 'auto']}>
+                      <Text>Shipping</Text>
+                      <Text>
+                        {
+                          orderSummeryData?.orders?.edges[0]?.node
+                            ?.shippingLines?.nodes[0]?.originalPriceSet
+                            ?.presentmentMoney?.currencyCode
+                        }{' '}
+                        {
+                          orderSummeryData?.orders?.edges[0]?.node
+                            ?.shippingLines?.nodes[0]?.originalPriceSet
+                            ?.presentmentMoney?.amount
+                        }
+                      </Text>
+                    </InlineLayout>
+                    <Icon source='chevronDown' size='small' />
                   </InlineLayout>
-                  <Icon source='chevronDown' size='small' />
-                </InlineLayout>
-              </Pressable>
+                </Pressable>
 
-              <BlockStack spacing='extraTight' id='shipping_method'>
-                <ChoiceList
-                  name='ship'
-                  value='ship-1'
-                  onChange={(value) => {
-                    console.log(`onChange event with value: ${value}`)
-                  }}>
-                  <Choice id='ship-1' secondaryContent={`USD`}>
-                    Ship
-                  </Choice>
-                  <Choice id='ship-2' secondaryContent={`USD`}>
-                    Ship
-                  </Choice>
-                </ChoiceList>
-              </BlockStack>
-            </Disclosure>
+                <BlockStack spacing='extraTight' id='shipping_method'>
+                  <ChoiceList
+                    name={
+                      orderSummeryData?.orders?.edges[0]?.node?.shippingLines
+                        ?.nodes[0].title
+                    }
+                    variant='group'
+                    value={
+                      orderSummeryData?.orders?.edges[0]?.node?.shippingLines
+                        ?.nodes[0].title
+                    }>
+                    <Choice
+                      id={
+                        orderSummeryData?.orders?.edges[0]?.node?.shippingLines
+                          ?.nodes[0].title
+                      }
+                      secondaryContent={formatCurrency(
+                        orderSummeryData?.orders?.edges[0]?.node?.shippingLines
+                          ?.nodes[0]?.originalPriceSet?.presentmentMoney
+                          ?.currencyCode,
+                        orderSummeryData?.orders?.edges[0]?.node?.shippingLines
+                          ?.nodes[0]?.originalPriceSet?.presentmentMoney?.amount
+                      )}>
+                      {
+                        orderSummeryData?.orders?.edges[0]?.node?.shippingLines
+                          ?.nodes[0].title
+                      }
+                    </Choice>
+                  </ChoiceList>
+                </BlockStack>
+              </Disclosure>
+            )}
+            <InlineLayout columns={['fill', 'auto']}>
+              <Text>Taxes</Text>
+              <Text>
+                {
+                  orderSummeryData?.orders?.edges[0]?.node?.totalTaxSet
+                    ?.presentmentMoney?.currencyCode
+                }{' '}
+                {
+                  orderSummeryData?.orders?.edges[0]?.node?.totalTaxSet
+                    ?.presentmentMoney?.amount
+                }
+              </Text>
+            </InlineLayout>
+            <InlineLayout columns={['fill', 'auto']}>
+              <Text>Total</Text>
+              <Text>
+                {
+                  orderSummeryData?.orders?.edges[0]?.node?.currentTotalPriceSet
+                    ?.presentmentMoney?.currencyCode
+                }{' '}
+                {
+                  orderSummeryData?.orders?.edges[0]?.node?.currentTotalPriceSet
+                    ?.presentmentMoney?.amount
+                }
+              </Text>
+            </InlineLayout>
+            <InlineLayout columns={['fill', 'auto']}>
+              <Text>Paid</Text>
+              <Text>
+                {
+                  orderSummeryData?.orders?.edges[0]?.node
+                    ?.originalTotalPriceSet?.presentmentMoney?.currencyCode
+                }{' '}
+                {
+                  orderSummeryData?.orders?.edges[0]?.node
+                    ?.originalTotalPriceSet?.presentmentMoney?.amount
+                }
+              </Text>
+            </InlineLayout>
           </BlockStack>
-        </View>
+        </BlockStack>
       )}
 
       <BlockSpacer spacing='base' />
@@ -486,6 +608,8 @@ function Extension() {
                 )}
                 {option?.slug == 'upgrade_shipping_method' && (
                   <UpgradeShippingMethod
+                    shopUrl={shopUrl}
+                    order_id={order_id}
                     defaultData={defaultData['upgrade_shipping_method']}
                     isLoading={loadingState['upgrade_shipping_method']}
                     optionName={option?.slug}
@@ -519,16 +643,12 @@ function Extension() {
                     optionName={option?.slug}
                   />
                 )}
-                {option?.slug == 'change_payment_method' && (
-                  <ChangePaymentMethod
-                    defaultData={defaultData['change_payment_method']}
-                    isLoading={loadingState['change_payment_method']}
-                    optionName={option?.slug}
-                  />
-                )}
                 {option?.slug == 'add_another_product' && (
                   <AddAnotherProduct
                     handleDefaultData={handleDefaultData}
+                    shopUrl={shopUrl}
+                    order_id={order_id}
+                    allProduct={allProduct['add_another_product']}
                     defaultData={defaultData['add_another_product']}
                     isLoading={loadingState['add_another_product']}
                     optionName={option?.slug}
@@ -640,7 +760,7 @@ const ShippingAddress = ({
           body: JSON.stringify(payload)
         }
       )
-      console.log(response)
+
       if (response.status === 201) {
         setSubmitSuccess(true)
         setButtonText('Updated')
@@ -951,7 +1071,7 @@ const ContactCustomerSupport = ({
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [buttonText, setButtonText] = useState('Send message')
   const [formErrors, setFormErrors] = useState({})
-
+  const sanitizedOrderName = orderName.replace('#', '')
   const contactReason =
     defaultData?.data?.support_reason_list?.reasons?.map((item) => ({
       value: item.title,
@@ -1031,7 +1151,7 @@ const ContactCustomerSupport = ({
         reasonDescription: '',
         fulfillment_id:
           defaultData?.data?.fufillmentOrder?.edges[0]?.node?.id || '',
-        order_name: orderName,
+        order_name: sanitizedOrderName,
         order_id: order_id,
         shop_url: shopUrl,
         email: defaultData?.data?.customer?.email || '',
@@ -1216,7 +1336,11 @@ const ChangeProductQuantities = ({
   const productsToShow = defaultData?.data?.product?.edges
     .filter((item) => item?.node?.currentQuantity > 0) // Filter products with quantity > 0
     .slice(0, loadMore)
-  console.log(productsToShow)
+
+  const totalProducts = (defaultData?.data?.product?.edges || []).filter(
+    (item) => item?.node?.currentQuantity > 0
+  ).length
+
   return (
     <View id={optionName} padding={['base', 'base', 'base', 'base']}>
       {isLoading ? (
@@ -1277,12 +1401,7 @@ const ChangeProductQuantities = ({
               </BlockStack>
             </InlineLayout>
           ))}
-
-          <InlineStack spacing='extraTight' blockAlignment='center'>
-            <Icon size='small' source='info' appearance='subdued' />
-            <Text size='small'>Taxes and shipping update automatically.</Text>
-          </InlineStack>
-          {loadMore < defaultData?.data?.product?.edges.length && (
+          {loadMore < totalProducts && (
             <Link onPress={handleViewMore}>View more products</Link>
           )}
           <Button kind='primary' onPress={handleSubmit} disabled={isSubmitting}>
@@ -1306,75 +1425,165 @@ const ChangeProductQuantities = ({
   )
 }
 
-const UpgradeShippingMethod = ({ optionName, defaultData }) => {
-  const [isLoading, setIsLoading] = useState(false)
+const UpgradeShippingMethod = ({
+  optionName,
+  defaultData,
+  isLoading,
+  shopUrl,
+  order_id
+}) => {
+  const { ui } = useApi()
   const [error, setError] = useState(null)
-  const [shippingMethod, setShippingMethod] = useState([
-    {
-      name: 'Standard'
-    },
-    {
-      name: 'Economy'
-    }
-  ])
+  const [shippingMethod, setShippingMethod] = useState([])
   const [selectedMethod, setSelectedMethod] = useState(null)
+  const [initialMethod, setInitialMethod] = useState(null) // Store the initial method
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [buttonText, setButtonText] = useState('Update Shipping Method')
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [submitError, setSubmitError] = useState(null)
-  const [redirectUrl, setRedirectUrl] = useState(null)
+
+  const shippingCountry = defaultData?.data?.shipping_address?.country
+
+  useEffect(() => {
+    try {
+      const locationGroups =
+        defaultData?.data?.shippingProfile?.data?.deliveryProfiles?.edges[0]
+          ?.node?.profileLocationGroups || []
+
+      const matchingZone = locationGroups
+        ?.flatMap((group) =>
+          group?.locationGroupZones?.edges?.map((zone) => ({
+            countries: zone?.node?.zone?.countries || [],
+            methods: zone?.node?.methodDefinitions?.nodes || []
+          }))
+        )
+        ?.find((zone) =>
+          zone?.countries?.some((country) => country?.name === shippingCountry)
+        )
+
+      if (matchingZone) {
+        const methods = matchingZone?.methods.map((method) => ({
+          name: method.name,
+          id: method.rateProvider.id,
+          price: method.rateProvider.price.amount,
+          currency: method.rateProvider.price.currencyCode
+        }))
+        setShippingMethod(methods)
+
+        // Set the default method
+        const defaultMethodTitle =
+          defaultData?.data?.selectedShipping?.nodes[0]?.title
+        const defaultMethod = methods.find(
+          (method) => method.name === defaultMethodTitle
+        )
+        if (defaultMethod) {
+          setSelectedMethod(defaultMethod)
+          setInitialMethod(defaultMethod) // Store the initial method
+        }
+      } else {
+        setShippingMethod([])
+      }
+    } catch (err) {
+      setError('Failed to fetch shipping methods.')
+    }
+  }, [defaultData, shippingCountry])
+
+  const handleSubmit = async () => {
+    if (!selectedMethod) {
+      setSubmitError('Please select a shipping method.')
+      return
+    }
+
+    setIsSubmitting(true)
+    setSubmitError(null)
+    setSubmitSuccess(false)
+    const payload = {
+      order_id: order_id,
+      shop_url: shopUrl,
+      name: selectedMethod?.name,
+      amount: selectedMethod?.price,
+      currencyCode: selectedMethod?.currency
+    }
+
+    try {
+      const response = await fetch(
+        `https://order-editing-staging.cleversity.com/api/storefront/update-shipping-method`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json'
+          },
+          body: JSON.stringify(payload)
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`)
+      }
+
+      const data = await response.json()
+      if (data.status === 201) {
+        setSubmitSuccess(true)
+        ui.forceDataRefresh('Shipping method update successfully!')
+      } else {
+        setSubmitError('Failed to update the shipping method.')
+      }
+    } catch (err) {
+      setSubmitError(`Error: ${err.message}`)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   return (
     <View id={optionName} padding={['base', 'base', 'base', 'base']}>
-      <BlockStack>
-        <ChoiceList
-          name='group-single'
-          variant='group'
-          value={selectedMethod?.name || ''}>
-          {shippingMethod?.map((item, index) => (
-            <Choice
-              key={index}
-              id={item.name}
-              value={item?.name}
-              secondaryContent={`USD`}>
-              {item.name}
-            </Choice>
+      {isLoading ? (
+        <BlockStack spacing='base'>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <SkeletonTextBlock key={i} size='extraLarge' />
           ))}
-        </ChoiceList>
-        <Button kind='primary'>
-          {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
-        </Button>
+        </BlockStack>
+      ) : (
+        <BlockStack>
+          <ChoiceList
+            name='group-single'
+            variant='group'
+            value={selectedMethod?.name || ''}
+            onChange={(value) =>
+              setSelectedMethod(
+                shippingMethod.find((method) => method.name === value)
+              )
+            }>
+            {shippingMethod?.map((item, index) => (
+              <Choice
+                key={index}
+                id={item.name}
+                value={item.name}
+                secondaryContent={`${item.price} ${item.currency}`}>
+                {item.name}
+              </Choice>
+            ))}
+          </ChoiceList>
+          <Button
+            kind='primary'
+            onPress={handleSubmit}
+            disabled={
+              isSubmitting || selectedMethod?.name === initialMethod?.name // Disable if no change
+            }>
+            {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
+          </Button>
 
-        {submitSuccess && (
-          <Banner
-            status='success'
-            title='Shipping method updated successfully!'>
-            {redirectUrl && (
-              <BlockStack inlineAlignment='center'>
-                <Link to={redirectUrl}>
-                  Click here to complete the draft order.
-                </Link>
-              </BlockStack>
-            )}
-          </Banner>
-        )}
-        {submitError && <Banner status='critical' title={submitError} />}
-        {error && <Banner status='critical' title={`Error: ${error}`} />}
-        <InlineLayout
-          padding={'base'}
-          background={'subdued'}
-          spacing={'base'}
-          columns={['auto', 'fill']}
-          blockAlignment='center'>
-          <Icon source='info' />
-          <Text>
-            When you change the shipping method, your existing order will be
-            canceled, and a draft order will be created to apply this change. To
-            see the updated shipping method in your order, you must complete the
-            checkout process in the storefront.
-          </Text>
-        </InlineLayout>
-      </BlockStack>
+          {submitSuccess && (
+            <Banner
+              status='success'
+              title='Shipping method updated successfully!'
+            />
+          )}
+          {submitError && <Banner status='critical' title={submitError} />}
+          {error && <Banner status='critical' title={`Error: ${error}`} />}
+        </BlockStack>
+      )}
     </View>
   )
 }
@@ -1393,7 +1602,7 @@ const CancelOrder = ({
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [submitError, setSubmitError] = useState(null)
   const [formErrors, setFormErrors] = useState({})
-
+  const sanitizedOrderName = orderName.replace('#', '')
   const cancelReason =
     defaultData?.data?.cancel_reason_list?.returnReasons?.map((item) => ({
       value: item.title,
@@ -1471,7 +1680,7 @@ const CancelOrder = ({
         reasonDescription: '',
         fulfillment_id:
           defaultData?.data?.fufillmentOrder?.edges[0]?.node?.id || '',
-        order_name: orderName,
+        order_name: sanitizedOrderName,
         order_id: order_id,
         shop_url: shopUrl
       })
@@ -1527,56 +1736,6 @@ const CancelOrder = ({
               )}
             </BlockStack>
           </Form>
-        )}
-      </BlockStack>
-    </View>
-  )
-}
-
-const ChangePaymentMethod = ({ optionName, defaultData }) => {
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [submitSuccess, setSubmitSuccess] = useState(false)
-  const [submitError, setSubmitError] = useState(null)
-  const [buttonText, setButtonText] = useState('Change Payment Method')
-  const [redirectUrl, setRedirectUrl] = useState(null)
-
-  return (
-    <View id={optionName} padding={['base', 'base', 'base', 'base']}>
-      <BlockStack>
-        <InlineLayout
-          padding={'base'}
-          background={'subdued'}
-          spacing={'base'}
-          columns={['auto', 'fill']}
-          blockAlignment='center'>
-          <Icon source='info' />
-          <Text>
-            When you change your payment method, your existing order will be
-            canceled, and a draft order will be created to apply this change. To
-            see the updated payment method in your order, you must complete the
-            checkout process.
-          </Text>
-        </InlineLayout>
-
-        <Button kind='primary' disabled={isSubmitting}>
-          {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
-        </Button>
-
-        {submitError && (
-          <Banner status='critical' title={`Error: ${submitError}`} />
-        )}
-        {submitSuccess && (
-          <Banner
-            status='success'
-            title='Payment method changed successfully!'
-          />
-        )}
-        {redirectUrl && (
-          <BlockStack inlineAlignment='center'>
-            <Link to={redirectUrl}>
-              Click here to continue the order process
-            </Link>
-          </BlockStack>
         )}
       </BlockStack>
     </View>
@@ -1747,7 +1906,7 @@ const DownloadInvoice = ({
       })
     }
   }, [isLoading, defaultData])
-  console.log(defaultData?.data?.customer?.email)
+
   const handleInputChange = (setter) => (value) => setter(value)
   const handleBusinessInputChange = (field) => (value) =>
     setBusinessData((prev) => ({ ...prev, [field]: value }))
@@ -2000,28 +2159,114 @@ const AddAnotherProduct = ({
   optionName,
   defaultData,
   isLoading,
-  handleDefaultData
+  shopUrl,
+  order_id,
+  handleDefaultData,
+  allProduct
 }) => {
+  const { ui } = useApi()
   const [loadMore, setLoadMore] = useState(4)
-  const [selectedProducts, setSelectedProducts] = useState([])
+  const [selectedProduct, setSelectedProduct] = useState(null)
+  const [isSingleProduct, setIsSingleProduct] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [submitError, setSubmitError] = useState(null)
   const [error, setError] = useState(null)
   const [buttonText, setButtonText] = useState('Save')
-  const [selectedImageSource, setSelectedImageSource] = useState(
-    'https://cdn.shopify.com/s/files/1/0711/2173/1816/files/44694ee386818f3276566210464cf341.jpg?v=1731948240'
-  )
+  const [selectedImageSource, setSelectedImageSource] = useState()
+  const [quantity, setQuantity] = useState(1)
+  const [addToCartButtonText, setAddToCartButtonText] = useState('Buy Now')
+  const [selectedVariant, setSelectedVariant] = useState('')
+  const [isLoadingMore, setIsLoadingMore] = useState(false) // State to manage loading for pagination
 
   const handleViewMore = () => {
-    setLoadMore((prevCount) => prevCount + 4)
+    // Get the cursor for the next page from the current pageInfo
+    const cursor = allProduct?.pageInfo?.endCursor
+
+    // Set isLoadingMore to true to show loading for pagination
+    setIsLoadingMore(true)
+
+    // Pass the cursor to load more data only if there is a next page
+    if (cursor && allProduct?.pageInfo?.hasNextPage) {
+      handleDefaultData('add_another_product', cursor)
+      setLoadMore((prevCount) => prevCount + 4)
+    }
   }
 
-  const productsToShow = defaultData?.products?.slice(0, loadMore)
+  const productsToShow = allProduct?.products?.slice(0, loadMore)
 
   const handleImageChange = (newSource) => {
     setSelectedImageSource(newSource)
   }
+
+  const handleSingleProduct = (product) => {
+    if (!product) {
+      setIsSingleProduct(true)
+    } else {
+      setSelectedProduct(product)
+      setIsSingleProduct(false)
+    }
+  }
+
+  const handleBack = () => {
+    setSelectedProduct(null)
+  }
+
+  useEffect(() => {
+    if (selectedProduct?.featuredMedia?.preview?.image?.url) {
+      setSelectedImageSource(
+        `${selectedProduct?.featuredMedia?.preview?.image?.url}`
+      )
+    }
+
+    // Set the default selectedVariant if variants are available
+    if (
+      selectedProduct?.variants?.nodes &&
+      selectedProduct.variants.nodes.length > 0
+    ) {
+      setSelectedVariant(selectedProduct.variants.nodes[0].id)
+    }
+  }, [selectedProduct])
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true)
+    setSubmitSuccess(false)
+    setSubmitError(null)
+
+    const payload = {
+      order_id: order_id,
+      shop_url: shopUrl,
+      variant_id: selectedVariant,
+      quantity: quantity
+    }
+
+    try {
+      const response = await fetch(
+        'https://order-editing-staging.cleversity.com/api/storefront/add-product',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        }
+      )
+
+      if (response.status === 201) {
+        setSubmitSuccess(true)
+        ui.forceDataRefresh('New product added successfully!')
+      } else {
+        throw new Error('Failed to add product')
+      }
+    } catch (error) {
+      setSubmitError(error.message)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // Hide the "View more products" link if there are no more products
+  const hasMoreProducts = allProduct?.pageInfo?.hasNextPage
 
   return (
     <View id={optionName} padding={['base', 'base', 'base', 'base']}>
@@ -2035,7 +2280,6 @@ const AddAnotherProduct = ({
         <BlockStack>
           <BlockStack spacing='loose'>
             <TextField label='Search product' />
-
             {error && <Banner status='critical' title={error} />}
             {productsToShow?.map((product) => (
               <InlineLayout
@@ -2067,147 +2311,92 @@ const AddAnotherProduct = ({
                   </BlockStack>
                 </InlineStack>
                 <Button
+                  onPress={() => handleSingleProduct(product)}
                   overlay={
                     <Modal padding size='large' id='my-modal'>
-                      <InlineLayout columns={['fill', 'fill']} spacing='base'>
-                        <BlockStack>
-                          <Image source={selectedImageSource} />
-                          <InlineLayout spacing='tight'>
-                            <Pressable
-                              onPress={() =>
-                                handleImageChange(
-                                  'https://cdn.shopify.com/s/files/1/0711/2173/1816/files/44694ee386818f3276566210464cf341.jpg?v=1731948240'
-                                )
-                              }>
-                              <Image
-                                cornerRadius='base'
-                                border='base'
-                                source='https://cdn.shopify.com/s/files/1/0711/2173/1816/files/44694ee386818f3276566210464cf341.jpg?v=1731948240'
-                              />
-                            </Pressable>
-                            <Pressable
-                              onPress={() =>
-                                handleImageChange(
-                                  'https://shopninja-optimarko.myshopify.com/cdn/shop/files/6eb0aa9fdb271e5954b2f0d09a0640e4.jpg?v=1731948241&width=823'
-                                )
-                              }>
-                              <Image
-                                cornerRadius='base'
-                                border='base'
-                                source='https://shopninja-optimarko.myshopify.com/cdn/shop/files/6eb0aa9fdb271e5954b2f0d09a0640e4.jpg?v=1731948241&width=823'
-                              />
-                            </Pressable>
-                            <Pressable
-                              onPress={() =>
-                                handleImageChange(
-                                  'https://shopninja-optimarko.myshopify.com/cdn/shop/files/015219de8a5be46a3b0a7b9089112d74.jpg?v=1731948241&width=823'
-                                )
-                              }>
-                              <Image
-                                cornerRadius='base'
-                                border='base'
-                                source='https://shopninja-optimarko.myshopify.com/cdn/shop/files/015219de8a5be46a3b0a7b9089112d74.jpg?v=1731948241&width=823'
-                              />
-                            </Pressable>
-                            <Pressable
-                              onPress={() =>
-                                handleImageChange(
-                                  'https://shopninja-optimarko.myshopify.com/cdn/shop/files/e8490702c423e6c62d356cace500822f.jpg?v=1731948241&width=823'
-                                )
-                              }>
-                              <Image
-                                cornerRadius='base'
-                                border='base'
-                                source='https://shopninja-optimarko.myshopify.com/cdn/shop/files/e8490702c423e6c62d356cace500822f.jpg?v=1731948241&width=823'
-                              />
-                            </Pressable>
-                          </InlineLayout>
-                        </BlockStack>
-
-                        <BlockStack>
-                          <BlockStack spacing='base'>
-                            <Heading level='1'>
-                              Selling Plans Ski Wax Selling Plans Ski Wax
-                              Selling Plans Ski Wax
-                            </Heading>
-                            <InlineStack>
-                              <Text size='medium' accessibilityRole='deletion'>
-                                $9.95
-                              </Text>
-                              <Text size='medium' appearance='critical'>
-                                $8.96
-                              </Text>
-                            </InlineStack>
-                            <BlockStack spacing='0'>
-                              <Text>Size</Text>
-                              <Select
-                                label='Select size'
-                                value='2'
-                                options={[
-                                  {
-                                    value: '1',
-                                    label: '1'
-                                  },
-                                  {
-                                    value: '2',
-                                    label: '2'
-                                  },
-                                  {
-                                    value: '3',
-                                    label: '3'
-                                  },
-                                  {
-                                    value: '4',
-                                    label: '4'
-                                  },
-                                  {
-                                    value: '5',
-                                    label: '5'
-                                  },
-                                  {
-                                    value: '6',
-                                    label: '6'
-                                  }
-                                ]}
-                              />
-                            </BlockStack>
-                            <BlockStack spacing='0'>
-                              <Text>Color</Text>
-                              <Select
-                                label='Select Color'
-                                value='2'
-                                options={[
-                                  {
-                                    value: '1',
-                                    label: 'Black'
-                                  },
-                                  {
-                                    value: '2',
-                                    label: 'Red'
-                                  },
-                                  {
-                                    value: '3',
-                                    label: 'Yellow'
-                                  },
-                                  {
-                                    value: '4',
-                                    label: 'Purple'
-                                  }
-                                ]}
-                              />
-                            </BlockStack>
-                          </BlockStack>
+                      {isSingleProduct ? (
+                        <InlineLayout spacing='base'>
+                          <SkeletonImage inlineSize={300} blockSize={300} />
+                          <SkeletonTextBlock lines={5} />
+                        </InlineLayout>
+                      ) : (
+                        <InlineLayout columns={['fill', 'fill']} spacing='base'>
                           <BlockStack>
-                            <Stepper label='Quantity' value={1} />
-                            <Button
-                              onPress={() => {
-                                console.log('onPress event')
-                              }}>
-                              Add to cart
-                            </Button>
+                            <Image
+                              loading='eager'
+                              source={selectedImageSource}
+                            />
+                            <InlineStack spacing='tight'>
+                              {selectedProduct?.media?.nodes?.map(
+                                (item, index) => (
+                                  <Pressable
+                                    key={index}
+                                    onPress={() =>
+                                      handleImageChange(
+                                        `${item?.preview?.image?.url}`
+                                      )
+                                    }>
+                                    <ProductThumbnail
+                                      cornerRadius='base'
+                                      border='base'
+                                      source={item?.preview?.image?.url}
+                                    />
+                                  </Pressable>
+                                )
+                              )}
+                            </InlineStack>
                           </BlockStack>
-                        </BlockStack>
-                      </InlineLayout>
+
+                          <BlockStack>
+                            <BlockStack spacing='base'>
+                              <Heading level='1'>
+                                {selectedProduct?.title}
+                              </Heading>
+                              <InlineStack>
+                                <Text size='medium' appearance='critical'>
+                                  Variant
+                                </Text>
+                              </InlineStack>
+                              <Select
+                                label='Variant'
+                                value={selectedVariant}
+                                options={
+                                  selectedProduct?.variants?.nodes
+                                    ? selectedProduct.variants.nodes.map(
+                                        (variant) => ({
+                                          value: variant.id,
+                                          label: variant.title
+                                        })
+                                      )
+                                    : []
+                                }
+                                onChange={(value) => setSelectedVariant(value)}
+                              />
+                              <Stepper
+                                label='Quantity'
+                                value={quantity}
+                                min={1}
+                                onChange={(value) => setQuantity(value)}
+                              />
+                            </BlockStack>
+                            <BlockStack padding='none'>
+                              <Button
+                                onPress={handleSubmit}
+                                size='small'
+                                disabled={isSubmitting}>
+                                {isSubmitting ? (
+                                  <Spinner />
+                                ) : (
+                                  addToCartButtonText
+                                )}
+                              </Button>
+                              <Button onPress={handleBack} size='small'>
+                                Back
+                              </Button>
+                            </BlockStack>
+                          </BlockStack>
+                        </InlineLayout>
+                      )}
                     </Modal>
                   }>
                   View
@@ -2216,15 +2405,13 @@ const AddAnotherProduct = ({
             ))}
           </BlockStack>
 
-          <Link onPress={handleViewMore}>View more products</Link>
-
-          <Button kind='primary' disabled={isSubmitting}>
-            {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
-          </Button>
+          {hasMoreProducts && (
+            <Link onPress={handleViewMore}>View more products</Link>
+          )}
 
           {submitError && <Banner status='critical' title={submitError} />}
           {submitSuccess && (
-            <Banner status='success' title='Products added successfully!' />
+            <Banner status='positive' title='Product successfully added' />
           )}
         </BlockStack>
       )}
@@ -2308,8 +2495,12 @@ const ChangeProductSizeAndVariant = ({
   }
 
   const productsToShow = defaultData?.data?.product?.edges
-    .filter((item) => item?.node?.currentQuantity > 0) // Filter products with quantity > 0
+    .filter((item) => item?.node?.currentQuantity > 0)
     .slice(0, loadMore)
+
+  const totalProducts = (defaultData?.data?.product?.edges || []).filter(
+    (item) => item?.node?.currentQuantity > 0
+  ).length
 
   return (
     <View id={optionName} padding={['base', 'base', 'base', 'base']}>
@@ -2368,7 +2559,7 @@ const ChangeProductSizeAndVariant = ({
             )
           })}
 
-          {loadMore < defaultData?.data?.product?.edges.length && (
+          {loadMore < totalProducts && (
             <Link onPress={handleViewMore}>View more products</Link>
           )}
 
@@ -2407,7 +2598,7 @@ const SwitchProduct = ({
   const { ui } = useApi()
   const [loadMore, setLoadMore] = useState(4)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [addToCartButtonText, setAddToCartButtonText] = useState('Add to cart')
+  const [addToCartButtonText, setAddToCartButtonText] = useState('Add')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [selectedImageSource, setSelectedImageSource] = useState()
@@ -2456,7 +2647,9 @@ const SwitchProduct = ({
   const productsToShow = defaultData?.data?.product?.edges
     .filter((item) => item?.node?.currentQuantity > 0)
     .slice(0, loadMore)
-
+  const totalProducts = (defaultData?.data?.product?.edges || []).filter(
+    (item) => item?.node?.currentQuantity > 0
+  ).length
   // Function to handle selecting or deselecting a product to switch
   const handleProductSelect = (product) => {
     if (selectedProduct?.id === product?.id) {
@@ -2506,14 +2699,6 @@ const SwitchProduct = ({
     } finally {
       setIsSubmitting(false)
     }
-  }
-
-  const handleVariantSelect = (variantId) => {
-    setSelectedVariant(variantId)
-  }
-
-  const handleQuantityChange = (newQuantity) => {
-    setQuantity(newQuantity)
   }
 
   const getAllProduct = async (cursor = null, isLoadMore = false) => {
@@ -2696,13 +2881,13 @@ const SwitchProduct = ({
                                 label='Size/Variant'
                                 value={selectedVariant}
                                 options={singleProductVariant}
-                                onChange={(value) => handleVariantSelect(value)}
+                                onChange={(value) => setSelectedVariant(value)}
                               />
                               <Stepper
                                 label='Quantity'
                                 value={quantity}
                                 min={1}
-                                onChange={handleQuantityChange}
+                                onChange={(value) => setQuantity(value)}
                               />
                             </BlockStack>
                             <BlockStack padding='none'>
@@ -2822,7 +3007,8 @@ const SwitchProduct = ({
               </InlineLayout>
             ))}
           </BlockStack>
-          {loadMore < defaultData?.data?.product?.edges.length && (
+
+          {loadMore < totalProducts && (
             <Link onPress={handleViewMore}>View more products</Link>
           )}
 
