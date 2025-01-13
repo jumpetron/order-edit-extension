@@ -264,8 +264,6 @@ function Extension() {
       setRemoving((prev) => ({ ...prev, [lineItemId]: false }))
     }
   }
-
-  console.log(orderSummeryData?.orders?.edges[0]?.node?.lineItems?.edges)
   return (
     <View spacing='base'>
       {orderSummeryData?.length == 0 ? (
@@ -362,7 +360,41 @@ function Extension() {
                       <BlockStack spacing='0' inlineAlignment='end'>
                         <Text>{formatCurrency(currencyCode, totalPrice)}</Text>
                         <Link
-                          onPress={() => handleRemoveProduct(item.node.id)}
+                          overlay={
+                            <Modal id='remove-modal' padding>
+                              <BlockStack spacing='base'>
+                                <InlineStack inlineAlignment='center'>
+                                  <Text size='large'>Are you sure?</Text>
+                                </InlineStack>
+                                <Banner
+                                  status='critical'
+                                  title='Are you sure you want to remove this product
+                                  from your order? This action cannot be undone.'
+                                />
+                                <InlineLayout
+                                  columns={['fill', 'fill']}
+                                  spacing='base'>
+                                  <Button
+                                    disabled={removing[item.node.id]}
+                                    onPress={() =>
+                                      handleRemoveProduct(item.node.id)
+                                    }>
+                                    {removing[item.node.id] ? (
+                                      <Spinner appearance='subdued' />
+                                    ) : (
+                                      'Yes'
+                                    )}
+                                  </Button>
+                                  <Button
+                                    onPress={() =>
+                                      ui.overlay.close('remove-modal')
+                                    }>
+                                    Close
+                                  </Button>
+                                </InlineLayout>
+                              </BlockStack>
+                            </Modal>
+                          }
                           disabled={removing[item.node.id]}>
                           {removing[item.node.id] ? (
                             <Spinner appearance='subdued' />
@@ -779,21 +811,38 @@ const ShippingAddress = ({
       setIsSubmitting(false)
     }
   }
+
+  // Update form data from default data
   useEffect(() => {
-    if (!isLoading) {
+    if (!isLoading && defaultData) {
       setFormData({
-        firstName: defaultData?.data?.shipping_address?.firstName,
-        lastName: defaultData?.data?.shipping_address?.lastName,
-        address1: defaultData?.data?.shipping_address?.address1,
-        address2: defaultData?.data?.shipping_address?.address2,
-        city: defaultData?.data?.shipping_address?.city,
-        zip: defaultData?.data?.shipping_address?.zip,
-        provinceCode: defaultData?.data?.shipping_address?.provinceCode,
-        countryCode: defaultData?.data?.shipping_address?.countryCodeV2,
-        phone: defaultData?.data?.shipping_address?.phone
+        firstName: defaultData?.data?.shipping_address?.firstName || '',
+        lastName: defaultData?.data?.shipping_address?.lastName || '',
+        address1: defaultData?.data?.shipping_address?.address1 || '',
+        address2: defaultData?.data?.shipping_address?.address2 || '',
+        city: defaultData?.data?.shipping_address?.city || '',
+        zip: defaultData?.data?.shipping_address?.zip || '',
+        provinceCode: defaultData?.data?.shipping_address?.provinceCode || '',
+        countryCode: defaultData?.data?.shipping_address?.countryCodeV2 || '',
+        phone: defaultData?.data?.shipping_address?.phone || ''
       })
     }
   }, [defaultData, isLoading])
+
+  // Check if form data has changed
+  const isFormChanged =
+    JSON.stringify(formData) !==
+      JSON.stringify({
+        firstName: defaultData?.data?.shipping_address?.firstName || '',
+        lastName: defaultData?.data?.shipping_address?.lastName || '',
+        address1: defaultData?.data?.shipping_address?.address1 || '',
+        address2: defaultData?.data?.shipping_address?.address2 || '',
+        city: defaultData?.data?.shipping_address?.city || '',
+        zip: defaultData?.data?.shipping_address?.zip || '',
+        provinceCode: defaultData?.data?.shipping_address?.provinceCode || '',
+        countryCode: defaultData?.data?.shipping_address?.countryCodeV2 || '',
+        phone: defaultData?.data?.shipping_address?.phone || ''
+      }) || updateDefaultShippingAddress
 
   return (
     <View id={optionName} padding={['base', 'base', 'base', 'base']}>
@@ -894,7 +943,9 @@ const ShippingAddress = ({
             )}
             {submitError && <Banner status='warning' title={submitError} />}
 
-            <Button accessibilityRole='submit' disabled={isSubmitting}>
+            <Button
+              accessibilityRole='submit'
+              disabled={isSubmitting || !isFormChanged}>
               {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
             </Button>
           </BlockStack>
@@ -1241,7 +1292,7 @@ const ChangeProductQuantities = ({
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [quantities, setQuantities] = useState({})
-  const [removing, setRemoving] = useState({}) // Track removing state per product
+  const [removing, setRemoving] = useState({})
 
   const handleViewMore = () => {
     setLoadMore((prevCount) => prevCount + 4)
@@ -1252,6 +1303,15 @@ const ChangeProductQuantities = ({
       ...prev,
       [lineItemId]: value
     }))
+  }
+
+  const hasChanges = () => {
+    return defaultData?.data?.product?.edges?.some((item) => {
+      const lineItemId = item?.node?.id
+      const currentQuantity = item?.node?.currentQuantity
+      const newQuantity = quantities[lineItemId] ?? currentQuantity
+      return newQuantity !== currentQuantity
+    })
   }
 
   const handleSubmit = async () => {
@@ -1334,7 +1394,7 @@ const ChangeProductQuantities = ({
   }
 
   const productsToShow = defaultData?.data?.product?.edges
-    .filter((item) => item?.node?.currentQuantity > 0) // Filter products with quantity > 0
+    ?.filter((item) => item?.node?.currentQuantity > 0)
     .slice(0, loadMore)
 
   const totalProducts = (defaultData?.data?.product?.edges || []).filter(
@@ -1390,7 +1450,35 @@ const ChangeProductQuantities = ({
                   }
                 />
                 <Link
-                  onPress={() => handleRemoveProduct(item.node.id)}
+                  overlay={
+                    <Modal id='remove-modal' padding>
+                      <BlockStack spacing='base'>
+                        <InlineStack inlineAlignment='center'>
+                          <Text size='large'>Are you sure?</Text>
+                        </InlineStack>
+                        <Banner
+                          status='critical'
+                          title='Are you sure you want to remove this product
+                                  from your order? This action cannot be undone.'
+                        />
+                        <InlineLayout columns={['fill', 'fill']} spacing='base'>
+                          <Button
+                            disabled={removing[item.node.id]}
+                            onPress={() => handleRemoveProduct(item.node.id)}>
+                            {removing[item.node.id] ? (
+                              <Spinner appearance='subdued' />
+                            ) : (
+                              'Yes'
+                            )}
+                          </Button>
+                          <Button
+                            onPress={() => ui.overlay.close('remove-modal')}>
+                            Close
+                          </Button>
+                        </InlineLayout>
+                      </BlockStack>
+                    </Modal>
+                  }
                   disabled={removing[item.node.id]}>
                   {removing[item.node.id] ? (
                     <Spinner appearance='subdued' />
@@ -1404,7 +1492,10 @@ const ChangeProductQuantities = ({
           {loadMore < totalProducts && (
             <Link onPress={handleViewMore}>View more products</Link>
           )}
-          <Button kind='primary' onPress={handleSubmit} disabled={isSubmitting}>
+          <Button
+            kind='primary'
+            onPress={handleSubmit}
+            disabled={isSubmitting || !hasChanges()}>
             {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
           </Button>
           {/* Error Banner */}
@@ -1598,7 +1689,7 @@ const CancelOrder = ({
 }) => {
   const { ui } = useApi()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [buttonText, setButtonText] = useState('Cancel Order')
+  const [buttonText, setButtonText] = useState('Send Request')
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [submitError, setSubmitError] = useState(null)
   const [formErrors, setFormErrors] = useState({})
@@ -1617,6 +1708,10 @@ const CancelOrder = ({
     order_id: '',
     shop_url: ''
   })
+
+  const isOnHold = defaultData?.data?.fufillmentOrder?.nodes?.some(
+    (item) => item.status === 'ON_HOLD'
+  )
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({
@@ -1686,7 +1781,7 @@ const CancelOrder = ({
       })
     }
   }, [defaultData, isLoading])
-
+  console.log(defaultData?.data?.fufillmentOrder?.nodes)
   return (
     <View id={optionName} padding={['none', 'base', 'base', 'base']}>
       <BlockStack>
@@ -1722,9 +1817,18 @@ const CancelOrder = ({
                 You'll be contacted by the customer support team to confirm the
                 cancellation.
               </Text>
-              <Button kind='primary' accessibilityRole='submit'>
+              <Button
+                kind='primary'
+                accessibilityRole='submit'
+                disabled={isSubmitting || isOnHold}>
                 {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
               </Button>
+              {isOnHold && (
+                <Banner
+                  status='warning'
+                  title='Order cancellation is not allowed because one or more items have pending payment.'
+                />
+              )}
               {submitError && (
                 <Banner status='critical' title={`Error: ${submitError}`} />
               )}
@@ -2502,6 +2606,16 @@ const ChangeProductSizeAndVariant = ({
     (item) => item?.node?.currentQuantity > 0
   ).length
 
+  // Check if any selected variant matches the current variant
+  const isVariantUnchanged = Object.entries(selectedVariants).every(
+    ([lineItemId, variantId]) => {
+      const product = defaultData?.data?.product?.edges.find(
+        (item) => item.node.id === lineItemId
+      )
+      return product?.node?.variant?.id === variantId
+    }
+  )
+
   return (
     <View id={optionName} padding={['base', 'base', 'base', 'base']}>
       {isLoading ? (
@@ -2513,15 +2627,12 @@ const ChangeProductSizeAndVariant = ({
       ) : (
         <BlockStack>
           {productsToShow?.map((item) => {
-            const currentVariantId = item?.node?.variant?.id
-
-            // Filter out the product's current variant
-            const variantOptions = item?.node?.product?.variants?.edges
-              ?.filter((variant) => variant?.node?.id !== currentVariantId)
-              .map((variant) => ({
+            const variantOptions = item?.node?.product?.variants?.edges?.map(
+              (variant) => ({
                 value: variant?.node?.id || '',
                 label: variant?.node?.title
-              }))
+              })
+            )
 
             return (
               <InlineLayout
@@ -2550,9 +2661,11 @@ const ChangeProductSizeAndVariant = ({
                   </BlockStack>
                 </InlineLayout>
                 <Select
-                  label='Size/Variant'
-                  value={selectedVariants[item.node.id] || currentVariantId}
-                  options={variantOptions} // Use filtered options here
+                  label='Choose Variant'
+                  value={
+                    selectedVariants[item.node.id] || item.node.variant?.id
+                  }
+                  options={variantOptions} // Show all variants
                   onChange={(value) => handleVariantChange(item.node.id, value)}
                 />
               </InlineLayout>
@@ -2568,7 +2681,9 @@ const ChangeProductSizeAndVariant = ({
             kind='primary'
             onPress={handleSubmit}
             disabled={
-              isSubmitting || Object.keys(selectedVariants).length === 0
+              isSubmitting ||
+              Object.keys(selectedVariants).length === 0 ||
+              isVariantUnchanged
             }>
             {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
           </Button>
@@ -2598,7 +2713,7 @@ const SwitchProduct = ({
   const { ui } = useApi()
   const [loadMore, setLoadMore] = useState(4)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [addToCartButtonText, setAddToCartButtonText] = useState('Add')
+  const [addToCartButtonText, setAddToCartButtonText] = useState('Switch')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [selectedImageSource, setSelectedImageSource] = useState()
@@ -2691,11 +2806,11 @@ const SwitchProduct = ({
       const data = await response.json()
 
       // Handle the success response
-      setSuccess('Product added to cart successfully!')
-      setAddToCartButtonText('Added')
+      setSuccess('Product switch to cart successfully!')
+      setAddToCartButtonText('Switched')
       ui.forceDataRefresh('Product switch has been successfully!')
     } catch (err) {
-      setError('Failed to add product to cart. Please try again.')
+      setError('Failed to swtich product. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
