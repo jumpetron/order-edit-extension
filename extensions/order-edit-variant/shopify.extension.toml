@@ -4,7 +4,7 @@ handle = "order-edit-variant"
 type = "editor_extension_collection"
 
 # Add the handles of the extensions you want in this collection here
-includes=[ "order-edit-checkout-variant-2", "order-edit-checkout-variant-3","order-edit-checkout-variant-4"]
+includes=[ "order-edit-checkout-variant-3","order-edit-checkout-variant-4"]
 
 # You can also add extensions to the collection this way
 #[[extensions.include]]

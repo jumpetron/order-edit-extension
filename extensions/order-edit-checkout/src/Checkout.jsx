@@ -56,18 +56,23 @@ function Extension() {
   const { ui } = useApi()
   const [openId, setOpenId] = useState([])
   const [settings, setSettings] = useState({})
+  const [deadline, setDeadline] = useState(null) // Deadline data
+  const [timeRemaining, setTimeRemaining] = useState(null) // Timer state
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [loadingState, setLoadingState] = useState({})
   const [defaultData, setDefaultData] = useState({})
   const [allProduct, setAllProduct] = useState({})
   const [orderSummeryData, setOrderSummeryData] = useState([])
+  const [orderRefundData, setOrderRefundData] = useState([])
   const [isOrderSummeryLoading, setOrderSummeryLoading] = useState(false)
   const [orderSummeryError, setOrderSummeryError] = useState(null)
   const [removeError, setRemoveError] = useState('')
   const [removeSuccess, setRemoveSuccess] = useState('')
   const [removing, setRemoving] = useState({})
   const { shop, order, buyerIdentity } = useApi()
+  const [undoLoading, setUndoLoading] = useState(false)
+  const [undoError, setUndoError] = useState(null)
   const order_id = order?.current?.id
   const orderName = order?.current?.name
   const shopUrl = shop?.myshopifyDomain
@@ -101,6 +106,7 @@ function Extension() {
         }
         const data = await response.json()
         setSettings(data)
+        setDeadline(data?.data?.deadline)
       } catch (err) {
         setError(err.message)
       } finally {
@@ -199,6 +205,36 @@ function Extension() {
     }
   }
 
+  // Calculate remaining time
+  const calculateTimeRemaining = () => {
+    if (!deadline?.end) return 'No deadline available'
+
+    const endTime = new Date(deadline.end).getTime()
+    const now = new Date().getTime()
+    const difference = endTime - now
+
+    if (difference <= 0) {
+      return 'Time expired'
+    }
+
+    const hours = Math.floor((difference / (1000 * 60 * 60)) % 24)
+    const minutes = Math.floor((difference / (1000 * 60)) % 60)
+    const seconds = Math.floor((difference / 1000) % 60)
+
+    return `${hours}h ${minutes}m ${seconds}s`
+  }
+
+  // Update timer every second
+  useEffect(() => {
+    if (!deadline?.end) return
+
+    const interval = setInterval(() => {
+      setTimeRemaining(calculateTimeRemaining())
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [deadline])
+
   useEffect(() => {
     const fetchOrderSummeryData = async () => {
       const sanitizedOrderName = orderName.replace('#', '')
@@ -253,7 +289,7 @@ function Extension() {
         const errorData = await response.json()
         throw new Error(errorData.message || 'Failed to remove product.')
       }
-      console.log(response)
+
       setRemoveSuccess('Product removed successfully.')
       ui.forceDataRefresh('Product removed successfully!')
     } catch (err) {
@@ -264,8 +300,76 @@ function Extension() {
       setRemoving((prev) => ({ ...prev, [lineItemId]: false }))
     }
   }
+
+  const handleUndo = async () => {
+    setUndoLoading(true)
+    setUndoError(null)
+    try {
+      const response = await fetch(
+        `https://order-editing-staging.cleversity.com/api/storefront/order-undo?shop_url=${shopUrl}&order_id=${order_id}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      )
+
+      if (!response.ok) {
+        // Handle non-2xx responses
+        throw new Error(`Failed to undo the order. Status: ${response.status}`)
+      }
+
+      const data = await response.json()
+      ui.forceDataRefresh('Order has been reset successfully')
+    } catch (error) {
+      setUndoError(
+        error.message || 'Something went wrong while undoing the order.'
+      )
+    } finally {
+      setUndoLoading(false)
+    }
+  }
+  console.log(settings)
   return (
     <View spacing='base'>
+      <BlockStack
+        background='base'
+        padding={['base', 'base', 'base', 'base']}
+        cornerRadius='large'
+        border='base'>
+        <InlineLayout spacing='0' columns={['fill', '40%']}>
+          <BlockStack spacing='0'>
+            <InlineStack spacing='extraTight' blockAlignment='baseline'>
+              <Text size='large' emphasis='bold'>
+                {formatCurrency(
+                  orderSummeryData?.orders?.edges[0]?.node?.totalOutstandingSet
+                    ?.presentmentMoney?.currencyCode,
+                  orderSummeryData?.orders?.edges[0]?.node?.totalOutstandingSet
+                    ?.presentmentMoney?.amount
+                )}
+              </Text>
+              <Text size='extraSmall' emphasis='bold' appearance='subdued'>
+                {
+                  orderSummeryData?.orders?.edges[0]?.node?.totalOutstandingSet
+                    ?.presentmentMoney?.currencyCode
+                }
+              </Text>
+            </InlineStack>
+            <Text size='medium' emphasis='bold' appearance='subdued'>
+              Refund owed
+            </Text>
+          </BlockStack>
+          <Button disabled={undoLoading} appearance='monochrome'>
+            {undoLoading ? <Spinner /> : 'Accept refund'}
+          </Button>
+        </InlineLayout>
+        <TextBlock appearance='subdued' emphasis='bold'>
+          You have a remaining balance left to pay on your order. If you don't
+          pay before the editing deadline, we'll reverse your edits.
+        </TextBlock>
+      </BlockStack>
+      <BlockSpacer spacing='base' />
       {orderSummeryData?.length == 0 ? (
         ''
       ) : isOrderSummeryLoading ? (
@@ -281,6 +385,9 @@ function Extension() {
           cornerRadius='large'
           border='base'>
           <BlockStack>
+            {undoError && (
+              <Banner status='critical' title={`Error: ${undoError}`} />
+            )}
             <BlockStack spacing='base'>
               <InlineLayout spacing='0' columns={['fill', '30%']}>
                 <BlockStack spacing='0'>
@@ -307,7 +414,12 @@ function Extension() {
                     Payment due
                   </Text>
                 </BlockStack>
-                <Button>Undo</Button>
+                <Button
+                  appearance='monochrome'
+                  onPress={handleUndo}
+                  disabled={undoLoading}>
+                  {undoLoading ? <Spinner /> : 'Undo'}
+                </Button>
               </InlineLayout>
               <TextBlock appearance='subdued' emphasis='bold'>
                 You have a remaining balance left to pay on your order. If you
@@ -581,7 +693,14 @@ function Extension() {
         padding={['base', 'base', 'base', 'base']}>
         <BlockStack spacing='none'>
           <BlockStack padding={['base', 'base', 'base', 'base']}>
-            <Heading level={1}>Edit Order</Heading>
+            <InlineLayout columns={['fill', 'auto']}>
+              <Heading level={1}>Edit Order</Heading>
+              {loading || timeRemaining === null ? (
+                <SkeletonText />
+              ) : (
+                <Text>Deadline: {timeRemaining}</Text>
+              )}
+            </InlineLayout>
             <Divider />
           </BlockStack>
           {loading ? (
@@ -1211,6 +1330,9 @@ const ContactCustomerSupport = ({
     }
   }, [defaultData, isLoading])
 
+  // Check if reasonDescription is empty to disable the button
+  const isDescriptionEmpty = !formData.reasonDescription.trim()
+
   return (
     <View id={optionName} padding={['base', 'base', 'base', 'base']}>
       {isLoading ? (
@@ -1268,7 +1390,9 @@ const ContactCustomerSupport = ({
               />
             )}
             {submitError && <Banner status='warning' title={submitError} />}
-            <Button accessibilityRole='submit'>
+            <Button
+              accessibilityRole='submit'
+              disabled={isDescriptionEmpty || isSubmitting}>
               {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
             </Button>
           </BlockStack>
@@ -1781,7 +1905,6 @@ const CancelOrder = ({
       })
     }
   }, [defaultData, isLoading])
-  console.log(defaultData?.data?.fufillmentOrder?.nodes)
   return (
     <View id={optionName} padding={['none', 'base', 'base', 'base']}>
       <BlockStack>
@@ -1817,6 +1940,10 @@ const CancelOrder = ({
                 You'll be contacted by the customer support team to confirm the
                 cancellation.
               </Text>
+              <Banner
+                status='critical'
+                title='Order editing is disabled once a cancellation request is sent.'
+              />
               <Button
                 kind='primary'
                 accessibilityRole='submit'
@@ -1963,17 +2090,17 @@ const DownloadInvoice = ({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(false)
-  const [actionType, setActionType] = useState('download')
+  const [actionType, setActionType] = useState('send_invoice') // Default to send_invoice
   const [email, setEmail] = useState({
     customerEmail: ''
   })
   const [isBusiness, setIsBusiness] = useState(false)
   const [updateBilling, setUpdateBilling] = useState(false)
-  const [selectedCountry, setSelectedCountry] = useState('US')
+  const [selectedCountry, setSelectedCountry] = useState('US') // Default country
   const [taxIdOptions, setTaxIdOptions] = useState([])
   const [businessData, setBusinessData] = useState({
     company_name: '',
-    company_country: '',
+    company_country: 'US', // Default company country
     company_tax_id: '',
     company_tax_number: ''
   })
@@ -2025,8 +2152,14 @@ const DownloadInvoice = ({
     const payload = {
       order_id: order_id,
       shop_url: shopUrl,
-      email: actionType === 'email' ? email : undefined,
       type: actionType,
+      company_name: businessData.company_name,
+      company_country: businessData.company_country,
+      company_tax_id: businessData.company_tax_id,
+      company_tax_number: businessData.company_tax_number,
+      ...(actionType === 'send_invoice' && email.customerEmail
+        ? { email: email.customerEmail }
+        : {}),
       ...(isBusiness ? businessData : {}),
       ...(updateBilling ? billingData : {})
     }
@@ -2044,7 +2177,7 @@ const DownloadInvoice = ({
       if (!response.ok) {
         throw new Error('Failed to process the request.')
       }
-
+      console.log(response)
       setSuccess(true)
     } catch (err) {
       setError(err.message || 'Something went wrong.')
@@ -2052,6 +2185,16 @@ const DownloadInvoice = ({
       setIsSubmitting(false)
     }
   }
+
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => {
+        setSuccess(false)
+      }, 5000)
+
+      return () => clearTimeout(timer)
+    }
+  }, [success])
 
   const renderAddressSection = (type, address) => (
     <BlockStack spacing='tight'>
@@ -2088,6 +2231,7 @@ const DownloadInvoice = ({
             label='Email'
             value={email?.customerEmail}
             onChange={handleInputChange(setEmail)}
+            required
           />
         </BlockStack>
       )}
@@ -2140,7 +2284,7 @@ const DownloadInvoice = ({
                   required
                   label='Country/Region'
                   options={taxIdCountries}
-                  value={selectedCountry}
+                  value={businessData.company_country}
                   onChange={(value) => {
                     setSelectedCountry(value)
                     handleBusinessInputChange('company_country')(value)
@@ -2247,6 +2391,7 @@ const DownloadInvoice = ({
 
             {success && (
               <Banner
+                onDismiss={() => setSuccess(false)}
                 status='success'
                 title='Invoice processed successfully!'
               />
@@ -2276,14 +2421,13 @@ const AddAnotherProduct = ({
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [submitError, setSubmitError] = useState(null)
   const [error, setError] = useState(null)
-  const [buttonText, setButtonText] = useState('Save')
   const [selectedImageSource, setSelectedImageSource] = useState()
   const [quantity, setQuantity] = useState(1)
   const [addToCartButtonText, setAddToCartButtonText] = useState('Buy Now')
   const [selectedVariant, setSelectedVariant] = useState('')
   const [isLoadingMore, setIsLoadingMore] = useState(false) // State to manage loading for pagination
 
-  const handleViewMore = () => {
+  const handleViewMore = async () => {
     // Get the cursor for the next page from the current pageInfo
     const cursor = allProduct?.pageInfo?.endCursor
 
@@ -2292,8 +2436,17 @@ const AddAnotherProduct = ({
 
     // Pass the cursor to load more data only if there is a next page
     if (cursor && allProduct?.pageInfo?.hasNextPage) {
-      handleDefaultData('add_another_product', cursor)
-      setLoadMore((prevCount) => prevCount + 4)
+      try {
+        await handleDefaultData('add_another_product', cursor)
+        setLoadMore((prevCount) => prevCount + 4) // Update the products to show
+      } catch (error) {
+        setError('Failed to load more products')
+      } finally {
+        // Ensure isLoadingMore is set to false when loading is complete
+        setIsLoadingMore(false)
+      }
+    } else {
+      setIsLoadingMore(false) // If no more products, stop loading
     }
   }
 
@@ -2310,10 +2463,6 @@ const AddAnotherProduct = ({
       setSelectedProduct(product)
       setIsSingleProduct(false)
     }
-  }
-
-  const handleBack = () => {
-    setSelectedProduct(null)
   }
 
   useEffect(() => {
@@ -2397,7 +2546,11 @@ const AddAnotherProduct = ({
                     source={product?.featuredMedia?.preview?.image?.url}
                   />
                   <BlockStack spacing='extraTight'>
-                    <Heading level='3'>{product?.title}</Heading>
+                    <Heading level='3'>
+                      {product?.title.length > 22
+                        ? product?.title?.slice(0, 22) + '...'
+                        : product?.title}
+                    </Heading>
                     <Text size='small'>
                       {product?.priceRangeV2?.maxVariantPrice?.amount ===
                       product?.priceRangeV2?.minVariantPrice?.amount
@@ -2417,7 +2570,7 @@ const AddAnotherProduct = ({
                 <Button
                   onPress={() => handleSingleProduct(product)}
                   overlay={
-                    <Modal padding size='large' id='my-modal'>
+                    <Modal padding size='large' id='add-product-modal'>
                       {isSingleProduct ? (
                         <InlineLayout spacing='base'>
                           <SkeletonImage inlineSize={300} blockSize={300} />
@@ -2457,12 +2610,32 @@ const AddAnotherProduct = ({
                                 {selectedProduct?.title}
                               </Heading>
                               <InlineStack>
-                                <Text size='medium' appearance='critical'>
-                                  Variant
+                                <Text
+                                  size='medium'
+                                  appearance='success'
+                                  emphasis='bold'>
+                                  {(() => {
+                                    const selectedVariantData =
+                                      selectedProduct?.variants?.nodes?.find(
+                                        (variant) =>
+                                          variant.id === selectedVariant
+                                      )
+
+                                    if (!selectedVariantData)
+                                      return 'Price unavailable'
+
+                                    const priceInfo =
+                                      selectedVariantData?.presentmentPrices
+                                        ?.nodes[0]?.price
+                                    if (!priceInfo) return 'Price unavailable'
+
+                                    const { currencyCode, amount } = priceInfo
+                                    return formatCurrency(currencyCode, amount) // This function should format the currency correctly
+                                  })()}
                                 </Text>
                               </InlineStack>
                               <Select
-                                label='Variant'
+                                label='Choose option'
                                 value={selectedVariant}
                                 options={
                                   selectedProduct?.variants?.nodes
@@ -2482,8 +2655,6 @@ const AddAnotherProduct = ({
                                 min={1}
                                 onChange={(value) => setQuantity(value)}
                               />
-                            </BlockStack>
-                            <BlockStack padding='none'>
                               <Button
                                 onPress={handleSubmit}
                                 size='small'
@@ -2494,10 +2665,15 @@ const AddAnotherProduct = ({
                                   addToCartButtonText
                                 )}
                               </Button>
-                              <Button onPress={handleBack} size='small'>
+                              <Button
+                                onPress={() =>
+                                  ui.overlay.close('add-product-modal')
+                                }
+                                size='small'>
                                 Back
                               </Button>
                             </BlockStack>
+                            <BlockStack padding='none'></BlockStack>
                           </BlockStack>
                         </InlineLayout>
                       )}
@@ -2509,9 +2685,14 @@ const AddAnotherProduct = ({
             ))}
           </BlockStack>
 
-          {hasMoreProducts && (
-            <Link onPress={handleViewMore}>View more products</Link>
-          )}
+          {hasMoreProducts &&
+            (isLoadingMore ? (
+              <BlockStack inlineAlignment='center'>
+                <Spinner />
+              </BlockStack>
+            ) : (
+              <Link onPress={handleViewMore}>View more products</Link>
+            ))}
 
           {submitError && <Banner status='critical' title={submitError} />}
           {submitSuccess && (
@@ -2722,7 +2903,7 @@ const SwitchProduct = ({
   const [isProductLoading, setIsProductLoading] = useState(false)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [allProductData, setAllProductData] = useState([])
-  const [singleProduct, setSingleProduct] = useState({})
+  const [singleProduct, setSingleProduct] = useState(null)
   const [quantity, setQuantity] = useState(1)
 
   const deduplicateProducts = (products) => {
@@ -2915,7 +3096,11 @@ const SwitchProduct = ({
                     source={product?.node?.image?.url}
                   />
                   <BlockStack spacing='none'>
-                    <Text size='base'>{product?.node?.title}</Text>
+                    <Text size='base'>
+                      {product?.node?.title?.length > 22
+                        ? product?.node?.title.slice(0, 22) + '...'
+                        : product?.node?.title}
+                    </Text>
                     <Text size='small'>{product?.node?.variantTitle}</Text>
                     <Text size='small'>
                       Price:{' '}
@@ -2938,90 +3123,105 @@ const SwitchProduct = ({
                       id='my-modal'
                       title='Select a replacement product'>
                       {isProductSelect ? (
-                        <InlineLayout columns={['fill', 'fill']} spacing='base'>
-                          <BlockStack>
-                            <Image
-                              loading='eager'
-                              source={selectedImageSource}
-                            />
-                            <InlineStack spacing='tight'>
-                              {singleProduct?.media?.nodes?.map(
-                                (item, index) => (
-                                  <Pressable
-                                    key={index}
-                                    onPress={() =>
-                                      handleImageChange(
-                                        `${item?.preview?.image?.url}`
-                                      )
-                                    }>
-                                    <ProductThumbnail
-                                      cornerRadius='base'
-                                      border='base'
-                                      source={item?.preview?.image?.url}
-                                    />
-                                  </Pressable>
-                                )
-                              )}
-                            </InlineStack>
-                          </BlockStack>
-
-                          <BlockStack>
-                            <BlockStack spacing='base'>
-                              <Heading level='1'>
-                                {singleProduct?.title}
-                              </Heading>
-                              <InlineStack>
-                                <Text size='medium' appearance='critical'>
-                                  {(() => {
-                                    const selectedVariantData =
-                                      singleProduct?.variants?.nodes?.find(
-                                        (variant) =>
-                                          variant.id === selectedVariant
-                                      )
-
-                                    if (!selectedVariantData)
-                                      return 'Price unavailable'
-
-                                    const priceInfo =
-                                      selectedVariantData?.presentmentPrices
-                                        ?.nodes[0]?.price
-                                    if (!priceInfo) return 'Price unavailable'
-
-                                    const { currencyCode, amount } = priceInfo
-                                    return formatCurrency(currencyCode, amount)
-                                  })()}
-                                </Text>
-                              </InlineStack>
-                              <Select
-                                label='Size/Variant'
-                                value={selectedVariant}
-                                options={singleProductVariant}
-                                onChange={(value) => setSelectedVariant(value)}
+                        singleProduct ? (
+                          <InlineLayout
+                            columns={['fill', 'fill']}
+                            spacing='base'>
+                            <BlockStack>
+                              <Image
+                                loading='eager'
+                                source={selectedImageSource}
                               />
-                              <Stepper
-                                label='Quantity'
-                                value={quantity}
-                                min={1}
-                                onChange={(value) => setQuantity(value)}
-                              />
-                            </BlockStack>
-                            <BlockStack padding='none'>
-                              <Button
-                                onPress={handleAddToCart}
-                                size='small'
-                                disabled={isSubmitting}>
-                                {isSubmitting ? (
-                                  <Spinner />
-                                ) : (
-                                  addToCartButtonText
+                              <InlineStack spacing='tight'>
+                                {singleProduct?.media?.nodes?.map(
+                                  (item, index) => (
+                                    <Pressable
+                                      key={index}
+                                      onPress={() =>
+                                        handleImageChange(
+                                          `${item?.preview?.image?.url}`
+                                        )
+                                      }>
+                                      <ProductThumbnail
+                                        cornerRadius='base'
+                                        border='base'
+                                        source={item?.preview?.image?.url}
+                                      />
+                                    </Pressable>
+                                  )
                                 )}
-                              </Button>
-                              <Button onPress={handleBack} size='small'>
-                                Back
-                              </Button>
+                              </InlineStack>
                             </BlockStack>
-                          </BlockStack>
-                        </InlineLayout>
+
+                            <BlockStack>
+                              <BlockStack spacing='base'>
+                                <Heading level='1'>
+                                  {singleProduct?.title}
+                                </Heading>
+                                <InlineStack>
+                                  <Text
+                                    size='medium'
+                                    appearance='success'
+                                    emphasis='bold'>
+                                    {(() => {
+                                      const selectedVariantData =
+                                        singleProduct?.variants?.nodes?.find(
+                                          (variant) =>
+                                            variant.id === selectedVariant
+                                        )
+
+                                      if (!selectedVariantData)
+                                        return 'Price unavailable'
+
+                                      const priceInfo =
+                                        selectedVariantData?.presentmentPrices
+                                          ?.nodes[0]?.price
+                                      if (!priceInfo) return 'Price unavailable'
+
+                                      const { currencyCode, amount } = priceInfo
+                                      return formatCurrency(
+                                        currencyCode,
+                                        amount
+                                      )
+                                    })()}
+                                  </Text>
+                                </InlineStack>
+                                <Select
+                                  label='Choose option'
+                                  value={selectedVariant}
+                                  options={singleProductVariant}
+                                  onChange={(value) =>
+                                    setSelectedVariant(value)
+                                  }
+                                />
+                                <Stepper
+                                  label='Quantity'
+                                  value={quantity}
+                                  min={1}
+                                  onChange={(value) => setQuantity(value)}
+                                />
+                                <Button
+                                  onPress={handleAddToCart}
+                                  size='small'
+                                  disabled={isSubmitting}>
+                                  {isSubmitting ? (
+                                    <Spinner />
+                                  ) : (
+                                    addToCartButtonText
+                                  )}
+                                </Button>
+                                <Button onPress={handleBack} size='small'>
+                                  Back
+                                </Button>
+                              </BlockStack>
+                            </BlockStack>
+                          </InlineLayout>
+                        ) : (
+                          <InlineLayout spacing='base'>
+                            <SkeletonImage inlineSize={300} blockSize={300} />
+                            <SkeletonTextBlock lines={5} />
+                          </InlineLayout>
+                        )
                       ) : (
                         <BlockStack>
                           {/* Scrollable Content */}
@@ -3051,7 +3251,7 @@ const SwitchProduct = ({
                                     .map((product) => (
                                       <InlineLayout
                                         key={product.id}
-                                        columns={['fill', '30%']}
+                                        columns={['fill', '20%']}
                                         spacing='base'
                                         padding='base'>
                                         <InlineStack
@@ -3066,20 +3266,23 @@ const SwitchProduct = ({
                                           />
                                           <BlockStack spacing='none'>
                                             <Text size='base'>
-                                              {product?.title}
+                                              {product?.title?.length > 40
+                                                ? product?.title.slice(0, 40) +
+                                                  '...'
+                                                : product?.title}
                                             </Text>
                                             <Text size='small'>
                                               {product?.priceRangeV2
                                                 ?.maxVariantPrice?.amount ===
                                               product?.priceRangeV2
                                                 ?.minVariantPrice?.amount
-                                                ? formatCurrency(
+                                                ? `Price: ${formatCurrency(
                                                     product?.priceRangeV2
                                                       ?.minVariantPrice
                                                       ?.currencyCode,
                                                     product?.priceRangeV2
                                                       ?.minVariantPrice?.amount
-                                                  )
+                                                  )}`
                                                 : `Start from ${formatCurrency(
                                                     product?.priceRangeV2
                                                       ?.minVariantPrice
