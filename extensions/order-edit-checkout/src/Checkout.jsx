@@ -53,7 +53,7 @@ export default reactExtension(
 )
 
 function Extension() {
-  const { ui } = useApi()
+  const { ui, shop, order, buyerIdentity } = useApi()
   const [openId, setOpenId] = useState([])
   const [settings, setSettings] = useState({})
   const [deadline, setDeadline] = useState(null) // Deadline data
@@ -70,17 +70,21 @@ function Extension() {
   const [removeError, setRemoveError] = useState('')
   const [removeSuccess, setRemoveSuccess] = useState('')
   const [removing, setRemoving] = useState({})
-  const { shop, order, buyerIdentity } = useApi()
   const [undoLoading, setUndoLoading] = useState(false)
   const [undoError, setUndoError] = useState(null)
+  const [refundData, setRefundData] = useState([])
+  const [refundDataLoading, setRefundDataLoading] = useState(false)
+  const [refundDataError, setRefundDataError] = useState(null)
+  const [createRefundLoading, setCreateRefundLoading] = useState(false)
+  const [createRefundError, setCreateRefundError] = useState(null)
   const order_id = order?.current?.id
   const orderName = order?.current?.name
   const shopUrl = shop?.myshopifyDomain
   const email = buyerIdentity?.email?.current
+  const customer_id = buyerIdentity?.customer?.current?.id
   const handleDisclosure = (open) => {
     setOpenId(open)
   }
-
   const prepareHeaders = (headers) => {
     headers.set('Accept', 'application/json')
     headers.set('Content-Type', 'application/json')
@@ -330,45 +334,100 @@ function Extension() {
       setUndoLoading(false)
     }
   }
-  console.log(settings)
+  useEffect(() => {
+    const getRefundData = async () => {
+      setRefundDataLoading(true)
+      setRefundDataError(null)
+
+      try {
+        const response = await fetch(
+          `https://order-editing-staging.cleversity.com/api/storefront/refund-summary?shop_url=${shopUrl}&order_id=${order_id}`,
+          {
+            method: 'GET',
+            headers: prepareHeaders(new Headers())
+          }
+        )
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+        const data = await response.json()
+        setRefundData(data?.data)
+      } catch (err) {
+        setRefundDataError(err.message)
+      } finally {
+        setRefundDataLoading(false)
+      }
+    }
+
+    getRefundData()
+  }, [order_id, shopUrl])
+
+  const createRefund = async () => {
+    setCreateRefundLoading(true)
+    setCreateRefundError(null)
+    try {
+      const response = await fetch(
+        `https://order-editing-staging.cleversity.com/api/storefront/order-refund?order_id=${order_id}&shop_url=${shopUrl}&customer_id=${customer_id}`,
+        {
+          method: 'GET',
+          headers: prepareHeaders(new Headers())
+        }
+      )
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      const data = await response.json()
+      console.log(data)
+    } catch (err) {
+      setCreateRefundError(err.message)
+    } finally {
+      setCreateRefundLoading(false)
+    }
+  }
   return (
     <View spacing='base'>
-      <BlockStack
-        background='base'
-        padding={['base', 'base', 'base', 'base']}
-        cornerRadius='large'
-        border='base'>
-        <InlineLayout spacing='0' columns={['fill', '40%']}>
-          <BlockStack spacing='0'>
-            <InlineStack spacing='extraTight' blockAlignment='baseline'>
-              <Text size='large' emphasis='bold'>
-                {formatCurrency(
-                  orderSummeryData?.orders?.edges[0]?.node?.totalOutstandingSet
-                    ?.presentmentMoney?.currencyCode,
-                  orderSummeryData?.orders?.edges[0]?.node?.totalOutstandingSet
-                    ?.presentmentMoney?.amount
-                )}
+      {refundDataLoading ? (
+        <BlockStack spacing={'base'}>
+          {Array.from({ length: 3 }).map((_, i) => (
+            <SkeletonTextBlock key={i} size='extraLarge' />
+          ))}
+        </BlockStack>
+      ) : (
+        <BlockStack
+          background='base'
+          padding={['base', 'base', 'base', 'base']}
+          cornerRadius='large'
+          border='base'>
+          <InlineLayout spacing='0' columns={['fill', '40%']}>
+            <BlockStack spacing='0'>
+              <InlineStack spacing='extraTight' blockAlignment='baseline'>
+                <Text size='large' emphasis='bold'>
+                  {formatCurrency(
+                    refundData?.refund?.currencyCode,
+                    refundData?.refund?.amount
+                  )}
+                </Text>
+                <Text size='extraSmall' emphasis='bold' appearance='subdued'>
+                  {refundData?.refund?.currencyCode}
+                </Text>
+              </InlineStack>
+              <Text size='medium' emphasis='bold' appearance='subdued'>
+                Refund owed
               </Text>
-              <Text size='extraSmall' emphasis='bold' appearance='subdued'>
-                {
-                  orderSummeryData?.orders?.edges[0]?.node?.totalOutstandingSet
-                    ?.presentmentMoney?.currencyCode
-                }
-              </Text>
-            </InlineStack>
-            <Text size='medium' emphasis='bold' appearance='subdued'>
-              Refund owed
-            </Text>
-          </BlockStack>
-          <Button disabled={undoLoading} appearance='monochrome'>
-            {undoLoading ? <Spinner /> : 'Accept refund'}
-          </Button>
-        </InlineLayout>
-        <TextBlock appearance='subdued' emphasis='bold'>
-          You have a remaining balance left to pay on your order. If you don't
-          pay before the editing deadline, we'll reverse your edits.
-        </TextBlock>
-      </BlockStack>
+            </BlockStack>
+            <Button
+              disabled={undoLoading}
+              appearance='monochrome'
+              onPress={createRefund}>
+              {createRefundLoading ? <Spinner /> : 'Accept refund'}
+            </Button>
+          </InlineLayout>
+          <TextBlock appearance='subdued' emphasis='bold'>
+            {refundData?.summary}
+          </TextBlock>
+        </BlockStack>
+      )}
+
       <BlockSpacer spacing='base' />
       {orderSummeryData?.length == 0 ? (
         ''
