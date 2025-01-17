@@ -63,8 +63,7 @@ function Extension() {
   const [loadingState, setLoadingState] = useState({})
   const [defaultData, setDefaultData] = useState({})
   const [allProduct, setAllProduct] = useState({})
-  const [orderSummeryData, setOrderSummeryData] = useState([])
-  const [orderRefundData, setOrderRefundData] = useState([])
+  const [orderSummeryData, setOrderSummeryData] = useState(null)
   const [isOrderSummeryLoading, setOrderSummeryLoading] = useState(false)
   const [orderSummeryError, setOrderSummeryError] = useState(null)
   const [removeError, setRemoveError] = useState('')
@@ -72,7 +71,7 @@ function Extension() {
   const [removing, setRemoving] = useState({})
   const [undoLoading, setUndoLoading] = useState(false)
   const [undoError, setUndoError] = useState(null)
-  const [refundData, setRefundData] = useState([])
+  const [refundData, setRefundData] = useState({})
   const [refundDataLoading, setRefundDataLoading] = useState(false)
   const [refundDataError, setRefundDataError] = useState(null)
   const [createRefundLoading, setCreateRefundLoading] = useState(false)
@@ -124,7 +123,6 @@ function Extension() {
   const handleDefaultData = async (slug, cursor = null) => {
     setError(null)
 
-    // Set loading state to true only for the first call, not for pagination
     if (!cursor) {
       setLoadingState((prev) => ({
         ...prev,
@@ -220,7 +218,6 @@ function Extension() {
     if (difference <= 0) {
       return 'Time expired'
     }
-
     const hours = Math.floor((difference / (1000 * 60 * 60)) % 24)
     const minutes = Math.floor((difference / (1000 * 60)) % 60)
     const seconds = Math.floor((difference / 1000) % 60)
@@ -257,7 +254,7 @@ function Extension() {
           throw new Error(`HTTP error! status: ${response.status}`)
         }
         const data = await response.json()
-        setOrderSummeryData(data?.data)
+        setOrderSummeryData(data?.data || {}) // Ensure it defaults to an empty object
       } catch (err) {
         setOrderSummeryError(err.message)
       } finally {
@@ -377,235 +374,123 @@ function Extension() {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
       const data = await response.json()
-      console.log(data)
+      ui.forceDataRefresh('You received a partial refund for this order.')
     } catch (err) {
       setCreateRefundError(err.message)
     } finally {
       setCreateRefundLoading(false)
     }
   }
+
   return (
-    <View spacing='base'>
+    <BlockStack spacing='base'>
       {refundDataLoading ? (
         <BlockStack spacing={'base'}>
-          {Array.from({ length: 3 }).map((_, i) => (
+          {Array.from({ length: 2 }).map((_, i) => (
             <SkeletonTextBlock key={i} size='extraLarge' />
           ))}
         </BlockStack>
       ) : (
-        <BlockStack
-          background='base'
-          padding={['base', 'base', 'base', 'base']}
-          cornerRadius='large'
-          border='base'>
-          <InlineLayout spacing='0' columns={['fill', '40%']}>
-            <BlockStack spacing='0'>
-              <InlineStack spacing='extraTight' blockAlignment='baseline'>
-                <Text size='large' emphasis='bold'>
-                  {formatCurrency(
-                    refundData?.refund?.currencyCode,
-                    refundData?.refund?.amount
-                  )}
-                </Text>
-                <Text size='extraSmall' emphasis='bold' appearance='subdued'>
-                  {refundData?.refund?.currencyCode}
-                </Text>
-              </InlineStack>
-              <Text size='medium' emphasis='bold' appearance='subdued'>
-                Refund owed
-              </Text>
-            </BlockStack>
-            <Button
-              disabled={undoLoading}
-              appearance='monochrome'
-              onPress={createRefund}>
-              {createRefundLoading ? <Spinner /> : 'Accept refund'}
-            </Button>
-          </InlineLayout>
-          <TextBlock appearance='subdued' emphasis='bold'>
-            {refundData?.summary}
-          </TextBlock>
-        </BlockStack>
-      )}
-
-      <BlockSpacer spacing='base' />
-      {orderSummeryData?.length == 0 ? (
-        ''
-      ) : isOrderSummeryLoading ? (
-        <BlockStack spacing={'base'}>
-          {Array.from({ length: 5 }).map((_, i) => (
-            <SkeletonTextBlock key={i} size='extraLarge' />
-          ))}
-        </BlockStack>
-      ) : (
-        <BlockStack
-          background='base'
-          padding={['base', 'base', 'base', 'base']}
-          cornerRadius='large'
-          border='base'>
-          <BlockStack>
-            {undoError && (
-              <Banner status='critical' title={`Error: ${undoError}`} />
-            )}
-            <BlockStack spacing='base'>
-              <InlineLayout spacing='0' columns={['fill', '30%']}>
-                <BlockStack spacing='0'>
-                  <InlineStack spacing='extraTight' blockAlignment='baseline'>
-                    <Text size='large' emphasis='bold'>
-                      {formatCurrency(
-                        orderSummeryData?.orders?.edges[0]?.node
-                          ?.totalOutstandingSet?.presentmentMoney?.currencyCode,
-                        orderSummeryData?.orders?.edges[0]?.node
-                          ?.totalOutstandingSet?.presentmentMoney?.amount
-                      )}
-                    </Text>
-                    <Text
-                      size='extraSmall'
-                      emphasis='bold'
-                      appearance='subdued'>
-                      {
-                        orderSummeryData?.orders?.edges[0]?.node
-                          ?.totalOutstandingSet?.presentmentMoney?.currencyCode
-                      }
-                    </Text>
-                  </InlineStack>
-                  <Text size='medium' emphasis='bold' appearance='subdued'>
-                    Payment due
+        refundData &&
+        Object.keys(refundData).length > 0 && (
+          <BlockStack
+            background='base'
+            padding={['base', 'base', 'base', 'base']}
+            cornerRadius='large'
+            border='base'>
+            <InlineLayout spacing='0' columns={['fill', '40%']}>
+              <BlockStack spacing='0'>
+                <InlineStack spacing='extraTight' blockAlignment='baseline'>
+                  <Text size='large' emphasis='bold'>
+                    {formatCurrency(
+                      refundData?.refund?.currencyCode,
+                      refundData?.refund?.amount
+                    )}
                   </Text>
-                </BlockStack>
-                <Button
-                  appearance='monochrome'
-                  onPress={handleUndo}
-                  disabled={undoLoading}>
-                  {undoLoading ? <Spinner /> : 'Undo'}
-                </Button>
-              </InlineLayout>
-              <TextBlock appearance='subdued' emphasis='bold'>
-                You have a remaining balance left to pay on your order. If you
-                don't pay before the editing deadline, we'll reverse your edits.
-              </TextBlock>
-            </BlockStack>
-            <Divider />
-            <BlockStack padding='base' spacing='base'>
-              {orderSummeryData?.orders?.edges[0]?.node?.lineItems?.edges
-                ?.filter((item) => item?.node?.currentQuantity > 0) // Filter out items with quantity 0
-                ?.map((item) => {
-                  const unitPrice =
-                    item?.node?.discountedUnitPriceAfterAllDiscountsSet
-                      ?.shopMoney?.amount
-                  const currencyCode =
-                    item?.node?.discountedUnitPriceAfterAllDiscountsSet
-                      ?.shopMoney?.currencyCode
-                  const totalPrice = unitPrice * item?.node?.currentQuantity
-
-                  return (
-                    <InlineLayout
-                      key={item.node?.id}
-                      blockAlignment='center'
-                      spacing='base'
-                      columns={['fill', '30%']}>
-                      <InlineLayout columns={['auto', 'fill']} spacing='base'>
-                        <ProductThumbnail
-                          size='base'
-                          source={item?.node?.image?.url}
-                          badge={item?.node?.currentQuantity}
-                        />
-                        <BlockStack spacing='none'>
-                          <Text size='base' emphasis='bold'>
-                            {item?.node?.title}
-                          </Text>
-                          <Text size='small'>{item?.node?.variantTitle}</Text>
-                          <Text size='small'>
-                            {formatCurrency(
-                              item?.node
-                                ?.discountedUnitPriceAfterAllDiscountsSet
-                                ?.shopMoney?.currencyCode,
-                              item?.node
-                                ?.discountedUnitPriceAfterAllDiscountsSet
-                                ?.shopMoney?.amount
-                            )}{' '}
-                            x {item?.node?.currentQuantity}
-                          </Text>
-                        </BlockStack>
-                      </InlineLayout>
-                      <BlockStack spacing='0' inlineAlignment='end'>
-                        <Text>{formatCurrency(currencyCode, totalPrice)}</Text>
-                        <Link
-                          overlay={
-                            <Modal id='remove-modal' padding>
-                              <BlockStack spacing='base'>
-                                <InlineStack inlineAlignment='center'>
-                                  <Text size='large'>Are you sure?</Text>
-                                </InlineStack>
-                                <Banner
-                                  status='critical'
-                                  title='Are you sure you want to remove this product
-                                  from your order? This action cannot be undone.'
-                                />
-                                <InlineLayout
-                                  columns={['fill', 'fill']}
-                                  spacing='base'>
-                                  <Button
-                                    disabled={removing[item.node.id]}
-                                    onPress={() =>
-                                      handleRemoveProduct(item.node.id)
-                                    }>
-                                    {removing[item.node.id] ? (
-                                      <Spinner appearance='subdued' />
-                                    ) : (
-                                      'Yes'
-                                    )}
-                                  </Button>
-                                  <Button
-                                    onPress={() =>
-                                      ui.overlay.close('remove-modal')
-                                    }>
-                                    Close
-                                  </Button>
-                                </InlineLayout>
-                              </BlockStack>
-                            </Modal>
-                          }
-                          disabled={removing[item.node.id]}>
-                          {removing[item.node.id] ? (
-                            <Spinner appearance='subdued' />
-                          ) : (
-                            'Remove'
-                          )}
-                        </Link>
-                      </BlockStack>
-                    </InlineLayout>
-                  )
-                })}
-            </BlockStack>
-
-            <Disclosure onToggle={(open) => handleDisclosure(open)}>
-              <Pressable toggles={'sub_total'}>
-                <InlineLayout
-                  columns={['fill', 'auto']}
-                  spacing='base'
-                  blockAlignment='center'>
-                  <InlineLayout columns={['fill', 'auto']}>
-                    <Text>Subtotal</Text>
-                    <Text>
-                      {
-                        orderSummeryData?.orders?.edges[0]?.node
-                          ?.currentSubtotalPriceSet?.presentmentMoney
-                          ?.currencyCode
-                      }{' '}
-                      {
-                        orderSummeryData?.orders?.edges[0]?.node
-                          ?.currentSubtotalPriceSet?.presentmentMoney?.amount
-                      }
+                  <Text size='extraSmall' emphasis='bold' appearance='subdued'>
+                    {refundData?.refund?.currencyCode}
+                  </Text>
+                </InlineStack>
+                <Text size='medium' emphasis='bold' appearance='subdued'>
+                  Refund owed
+                </Text>
+              </BlockStack>
+              <Button
+                disabled={createRefundLoading}
+                appearance='monochrome'
+                onPress={createRefund}>
+                {createRefundLoading ? <Spinner /> : 'Accept refund'}
+              </Button>
+            </InlineLayout>
+            <TextBlock appearance='subdued' emphasis='bold'>
+              {refundData?.summary}
+            </TextBlock>
+          </BlockStack>
+        )
+      )}
+      {orderSummeryData &&
+        Object.keys(orderSummeryData).length > 0 &&
+        (isOrderSummeryLoading ? (
+          <BlockStack spacing={'base'}>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <SkeletonTextBlock key={i} size='extraLarge' />
+            ))}
+          </BlockStack>
+        ) : (
+          <BlockStack
+            background='base'
+            padding={['base', 'base', 'base', 'base']}
+            cornerRadius='large'
+            border='base'>
+            <BlockStack>
+              {undoError && (
+                <Banner status='critical' title={`Error: ${undoError}`} />
+              )}
+              <BlockStack spacing='base'>
+                <InlineLayout spacing='0' columns={['fill', '30%']}>
+                  <BlockStack spacing='0'>
+                    <InlineStack spacing='extraTight' blockAlignment='baseline'>
+                      <Text size='large' emphasis='bold'>
+                        {formatCurrency(
+                          orderSummeryData?.orders?.edges[0]?.node
+                            ?.totalOutstandingSet?.presentmentMoney
+                            ?.currencyCode,
+                          orderSummeryData?.orders?.edges[0]?.node
+                            ?.totalOutstandingSet?.presentmentMoney?.amount
+                        )}
+                      </Text>
+                      <Text
+                        size='extraSmall'
+                        emphasis='bold'
+                        appearance='subdued'>
+                        {
+                          orderSummeryData?.orders?.edges[0]?.node
+                            ?.totalOutstandingSet?.presentmentMoney
+                            ?.currencyCode
+                        }
+                      </Text>
+                    </InlineStack>
+                    <Text size='medium' emphasis='bold' appearance='subdued'>
+                      Payment due
                     </Text>
-                  </InlineLayout>
-                  <Icon source='chevronDown' size='small' />
+                  </BlockStack>
+                  <Button
+                    appearance='monochrome'
+                    onPress={handleUndo}
+                    disabled={undoLoading}>
+                    {undoLoading ? <Spinner /> : 'Undo'}
+                  </Button>
                 </InlineLayout>
-              </Pressable>
-
-              <BlockStack spacing='extraTight' id='sub_total'>
+                <TextBlock appearance='subdued' emphasis='bold'>
+                  You have a remaining balance left to pay on your order. If you
+                  don't pay before the editing deadline, we'll reverse your
+                  edits.
+                </TextBlock>
+              </BlockStack>
+              <Divider />
+              <BlockStack padding='base' spacing='base'>
                 {orderSummeryData?.orders?.edges[0]?.node?.lineItems?.edges
-                  ?.filter((item) => item?.node?.currentQuantity > 0)
+                  ?.filter((item) => item?.node?.currentQuantity > 0) // Filter out items with quantity 0
                   ?.map((item) => {
                     const unitPrice =
                       item?.node?.discountedUnitPriceAfterAllDiscountsSet
@@ -614,55 +499,107 @@ function Extension() {
                       item?.node?.discountedUnitPriceAfterAllDiscountsSet
                         ?.shopMoney?.currencyCode
                     const totalPrice = unitPrice * item?.node?.currentQuantity
+
                     return (
                       <InlineLayout
-                        spacing='base'
                         key={item.node?.id}
-                        columns={['fill', 'auto']}>
-                        <BlockStack spacing='0'>
-                          <Text size='small' appearance='subdued'>
-                            {item?.node?.currentQuantity}x {item?.node?.title}
+                        blockAlignment='center'
+                        spacing='base'
+                        columns={['fill', '30%']}>
+                        <InlineLayout columns={['auto', 'fill']} spacing='base'>
+                          <ProductThumbnail
+                            size='base'
+                            source={item?.node?.image?.url}
+                            badge={item?.node?.currentQuantity}
+                          />
+                          <BlockStack spacing='none'>
+                            <Text size='base' emphasis='bold'>
+                              {item?.node?.title}
+                            </Text>
+                            <Text size='small'>{item?.node?.variantTitle}</Text>
+                            <Text size='small'>
+                              {formatCurrency(
+                                item?.node
+                                  ?.discountedUnitPriceAfterAllDiscountsSet
+                                  ?.shopMoney?.currencyCode,
+                                item?.node
+                                  ?.discountedUnitPriceAfterAllDiscountsSet
+                                  ?.shopMoney?.amount
+                              )}{' '}
+                              x {item?.node?.currentQuantity}
+                            </Text>
+                          </BlockStack>
+                        </InlineLayout>
+                        <BlockStack spacing='0' inlineAlignment='end'>
+                          <Text>
+                            {formatCurrency(currencyCode, totalPrice)}
                           </Text>
-                          <Text size='small' appearance='subdued'>
-                            {item?.node?.variantTitle}
-                          </Text>
+                          <Link
+                            overlay={
+                              <Modal id='remove-modal' padding>
+                                <BlockStack spacing='base'>
+                                  <InlineStack inlineAlignment='center'>
+                                    <Text size='large'>Are you sure?</Text>
+                                  </InlineStack>
+                                  <Banner
+                                    status='critical'
+                                    title='Are you sure you want to remove this product
+                                from your order? This action cannot be undone.'
+                                  />
+                                  <InlineLayout
+                                    columns={['fill', 'fill']}
+                                    spacing='base'>
+                                    <Button
+                                      disabled={removing[item.node.id]}
+                                      onPress={() =>
+                                        handleRemoveProduct(item.node.id)
+                                      }>
+                                      {removing[item.node.id] ? (
+                                        <Spinner appearance='subdued' />
+                                      ) : (
+                                        'Yes'
+                                      )}
+                                    </Button>
+                                    <Button
+                                      onPress={() =>
+                                        ui.overlay.close('remove-modal')
+                                      }>
+                                      Close
+                                    </Button>
+                                  </InlineLayout>
+                                </BlockStack>
+                              </Modal>
+                            }
+                            disabled={removing[item.node.id]}>
+                            {removing[item.node.id] ? (
+                              <Spinner appearance='subdued' />
+                            ) : (
+                              'Remove'
+                            )}
+                          </Link>
                         </BlockStack>
-                        <Text size='small' appearance='subdued'>
-                          {formatCurrency(currencyCode, totalPrice)}
-                        </Text>
                       </InlineLayout>
                     )
                   })}
               </BlockStack>
-            </Disclosure>
-            {orderSummeryData?.orders?.edges[0]?.node?.shippingLines?.nodes
-              ?.length === 0 ? (
-              <InlineLayout
-                columns={['fill', 'auto']}
-                spacing='base'
-                blockAlignment='center'>
-                <Text>Shipping</Text>
-                <Text>Free</Text>
-              </InlineLayout>
-            ) : (
+
               <Disclosure onToggle={(open) => handleDisclosure(open)}>
-                <Pressable toggles={'shipping_method'}>
+                <Pressable toggles={'sub_total'}>
                   <InlineLayout
                     columns={['fill', 'auto']}
                     spacing='base'
                     blockAlignment='center'>
                     <InlineLayout columns={['fill', 'auto']}>
-                      <Text>Shipping</Text>
+                      <Text>Subtotal</Text>
                       <Text>
                         {
                           orderSummeryData?.orders?.edges[0]?.node
-                            ?.shippingLines?.nodes[0]?.originalPriceSet
-                            ?.presentmentMoney?.currencyCode
+                            ?.currentSubtotalPriceSet?.presentmentMoney
+                            ?.currencyCode
                         }{' '}
                         {
                           orderSummeryData?.orders?.edges[0]?.node
-                            ?.shippingLines?.nodes[0]?.originalPriceSet
-                            ?.presentmentMoney?.amount
+                            ?.currentSubtotalPriceSet?.presentmentMoney?.amount
                         }
                       </Text>
                     </InlineLayout>
@@ -670,83 +607,149 @@ function Extension() {
                   </InlineLayout>
                 </Pressable>
 
-                <BlockStack spacing='extraTight' id='shipping_method'>
-                  <ChoiceList
-                    name={
-                      orderSummeryData?.orders?.edges[0]?.node?.shippingLines
-                        ?.nodes[0].title
-                    }
-                    variant='group'
-                    value={
-                      orderSummeryData?.orders?.edges[0]?.node?.shippingLines
-                        ?.nodes[0].title
-                    }>
-                    <Choice
-                      id={
-                        orderSummeryData?.orders?.edges[0]?.node?.shippingLines
-                          ?.nodes[0].title
-                      }
-                      secondaryContent={formatCurrency(
-                        orderSummeryData?.orders?.edges[0]?.node?.shippingLines
-                          ?.nodes[0]?.originalPriceSet?.presentmentMoney
-                          ?.currencyCode,
-                        orderSummeryData?.orders?.edges[0]?.node?.shippingLines
-                          ?.nodes[0]?.originalPriceSet?.presentmentMoney?.amount
-                      )}>
-                      {
-                        orderSummeryData?.orders?.edges[0]?.node?.shippingLines
-                          ?.nodes[0].title
-                      }
-                    </Choice>
-                  </ChoiceList>
+                <BlockStack spacing='extraTight' id='sub_total'>
+                  {orderSummeryData?.orders?.edges[0]?.node?.lineItems?.edges
+                    ?.filter((item) => item?.node?.currentQuantity > 0)
+                    ?.map((item) => {
+                      const unitPrice =
+                        item?.node?.discountedUnitPriceAfterAllDiscountsSet
+                          ?.shopMoney?.amount
+                      const currencyCode =
+                        item?.node?.discountedUnitPriceAfterAllDiscountsSet
+                          ?.shopMoney?.currencyCode
+                      const totalPrice = unitPrice * item?.node?.currentQuantity
+                      return (
+                        <InlineLayout
+                          spacing='base'
+                          key={item.node?.id}
+                          columns={['fill', 'auto']}>
+                          <BlockStack spacing='0'>
+                            <Text size='small' appearance='subdued'>
+                              {item?.node?.currentQuantity}x {item?.node?.title}
+                            </Text>
+                            <Text size='small' appearance='subdued'>
+                              {item?.node?.variantTitle}
+                            </Text>
+                          </BlockStack>
+                          <Text size='small' appearance='subdued'>
+                            {formatCurrency(currencyCode, totalPrice)}
+                          </Text>
+                        </InlineLayout>
+                      )
+                    })}
                 </BlockStack>
               </Disclosure>
-            )}
-            <InlineLayout columns={['fill', 'auto']}>
-              <Text>Taxes</Text>
-              <Text>
-                {
-                  orderSummeryData?.orders?.edges[0]?.node?.totalTaxSet
-                    ?.presentmentMoney?.currencyCode
-                }{' '}
-                {
-                  orderSummeryData?.orders?.edges[0]?.node?.totalTaxSet
-                    ?.presentmentMoney?.amount
-                }
-              </Text>
-            </InlineLayout>
-            <InlineLayout columns={['fill', 'auto']}>
-              <Text>Total</Text>
-              <Text>
-                {
-                  orderSummeryData?.orders?.edges[0]?.node?.currentTotalPriceSet
-                    ?.presentmentMoney?.currencyCode
-                }{' '}
-                {
-                  orderSummeryData?.orders?.edges[0]?.node?.currentTotalPriceSet
-                    ?.presentmentMoney?.amount
-                }
-              </Text>
-            </InlineLayout>
-            <InlineLayout columns={['fill', 'auto']}>
-              <Text>Paid</Text>
-              <Text>
-                {
-                  orderSummeryData?.orders?.edges[0]?.node
-                    ?.originalTotalPriceSet?.presentmentMoney?.currencyCode
-                }{' '}
-                {
-                  orderSummeryData?.orders?.edges[0]?.node
-                    ?.originalTotalPriceSet?.presentmentMoney?.amount
-                }
-              </Text>
-            </InlineLayout>
-          </BlockStack>
-        </BlockStack>
-      )}
+              {orderSummeryData?.orders?.edges[0]?.node?.shippingLines?.nodes
+                ?.length === 0 ? (
+                <InlineLayout
+                  columns={['fill', 'auto']}
+                  spacing='base'
+                  blockAlignment='center'>
+                  <Text>Shipping</Text>
+                  <Text>Free</Text>
+                </InlineLayout>
+              ) : (
+                <Disclosure onToggle={(open) => handleDisclosure(open)}>
+                  <Pressable toggles={'shipping_method'}>
+                    <InlineLayout
+                      columns={['fill', 'auto']}
+                      spacing='base'
+                      blockAlignment='center'>
+                      <InlineLayout columns={['fill', 'auto']}>
+                        <Text>Shipping</Text>
+                        <Text>
+                          {
+                            orderSummeryData?.orders?.edges[0]?.node
+                              ?.shippingLines?.nodes[0]?.originalPriceSet
+                              ?.presentmentMoney?.currencyCode
+                          }{' '}
+                          {
+                            orderSummeryData?.orders?.edges[0]?.node
+                              ?.shippingLines?.nodes[0]?.originalPriceSet
+                              ?.presentmentMoney?.amount
+                          }
+                        </Text>
+                      </InlineLayout>
+                      <Icon source='chevronDown' size='small' />
+                    </InlineLayout>
+                  </Pressable>
 
-      <BlockSpacer spacing='base' />
-      <View
+                  <BlockStack spacing='extraTight' id='shipping_method'>
+                    <ChoiceList
+                      name={
+                        orderSummeryData?.orders?.edges[0]?.node?.shippingLines
+                          ?.nodes[0].title
+                      }
+                      variant='group'
+                      value={
+                        orderSummeryData?.orders?.edges[0]?.node?.shippingLines
+                          ?.nodes[0].title
+                      }>
+                      <Choice
+                        id={
+                          orderSummeryData?.orders?.edges[0]?.node
+                            ?.shippingLines?.nodes[0].title
+                        }
+                        secondaryContent={formatCurrency(
+                          orderSummeryData?.orders?.edges[0]?.node
+                            ?.shippingLines?.nodes[0]?.originalPriceSet
+                            ?.presentmentMoney?.currencyCode,
+                          orderSummeryData?.orders?.edges[0]?.node
+                            ?.shippingLines?.nodes[0]?.originalPriceSet
+                            ?.presentmentMoney?.amount
+                        )}>
+                        {
+                          orderSummeryData?.orders?.edges[0]?.node
+                            ?.shippingLines?.nodes[0].title
+                        }
+                      </Choice>
+                    </ChoiceList>
+                  </BlockStack>
+                </Disclosure>
+              )}
+              <InlineLayout columns={['fill', 'auto']}>
+                <Text>Taxes</Text>
+                <Text>
+                  {
+                    orderSummeryData?.orders?.edges[0]?.node?.totalTaxSet
+                      ?.presentmentMoney?.currencyCode
+                  }{' '}
+                  {
+                    orderSummeryData?.orders?.edges[0]?.node?.totalTaxSet
+                      ?.presentmentMoney?.amount
+                  }
+                </Text>
+              </InlineLayout>
+              <InlineLayout columns={['fill', 'auto']}>
+                <Text>Total</Text>
+                <Text>
+                  {
+                    orderSummeryData?.orders?.edges[0]?.node
+                      ?.currentTotalPriceSet?.presentmentMoney?.currencyCode
+                  }{' '}
+                  {
+                    orderSummeryData?.orders?.edges[0]?.node
+                      ?.currentTotalPriceSet?.presentmentMoney?.amount
+                  }
+                </Text>
+              </InlineLayout>
+              <InlineLayout columns={['fill', 'auto']}>
+                <Text>Paid</Text>
+                <Text>
+                  {
+                    orderSummeryData?.orders?.edges[0]?.node
+                      ?.originalTotalPriceSet?.presentmentMoney?.currencyCode
+                  }{' '}
+                  {
+                    orderSummeryData?.orders?.edges[0]?.node
+                      ?.originalTotalPriceSet?.presentmentMoney?.amount
+                  }
+                </Text>
+              </InlineLayout>
+            </BlockStack>
+          </BlockStack>
+        ))}
+      <BlockStack
         cornerRadius='large'
         border={'base'}
         padding={['base', 'base', 'base', 'base']}>
@@ -896,8 +899,8 @@ function Extension() {
             ))
           )}
         </BlockStack>
-      </View>
-    </View>
+      </BlockStack>
+    </BlockStack>
   )
 }
 
@@ -2153,13 +2156,14 @@ const DownloadInvoice = ({
   const [email, setEmail] = useState({
     customerEmail: ''
   })
+  const [downloadUrl, setDownloadUrl] = useState('')
   const [isBusiness, setIsBusiness] = useState(false)
   const [updateBilling, setUpdateBilling] = useState(false)
   const [selectedCountry, setSelectedCountry] = useState('US') // Default country
   const [taxIdOptions, setTaxIdOptions] = useState([])
   const [businessData, setBusinessData] = useState({
     company_name: '',
-    company_country: 'US', // Default company country
+    company_country: '', // Default company country
     company_tax_id: '',
     company_tax_number: ''
   })
@@ -2228,7 +2232,10 @@ const DownloadInvoice = ({
         'https://order-editing-staging.cleversity.com/api/storefront/send-download-invoice',
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json'
+          },
           body: JSON.stringify(payload)
         }
       )
@@ -2236,8 +2243,20 @@ const DownloadInvoice = ({
       if (!response.ok) {
         throw new Error('Failed to process the request.')
       }
-      console.log(response)
-      setSuccess(true)
+
+      const result = await response.json() // ✅ Parse JSON first
+
+      console.log(result) // Debugging
+
+      if (result?.status === 200) {
+        setSuccess(true)
+        // Only set download URL if data exists (for downloads)
+        if (result?.data?.length > 0) {
+          setDownloadUrl(result.data[0])
+        }
+      } else {
+        throw new Error(result?.message || 'Invalid response from server.')
+      }
     } catch (err) {
       setError(err.message || 'Something went wrong.')
     } finally {
@@ -2254,6 +2273,16 @@ const DownloadInvoice = ({
       return () => clearTimeout(timer)
     }
   }, [success])
+
+  useEffect(() => {
+    if (downloadUrl) {
+      const timer = setTimeout(() => {
+        setDownloadUrl('')
+      }, 10000) // Reset after 30 seconds
+
+      return () => clearTimeout(timer)
+    }
+  }, [downloadUrl])
 
   const renderAddressSection = (type, address) => (
     <BlockStack spacing='tight'>
@@ -2437,16 +2466,22 @@ const DownloadInvoice = ({
 
             {renderInvoiceOptions()}
 
-            <Button
-              kind='primary'
-              disabled={isSubmitting}
-              accessibilityRole='submit'>
-              {isSubmitting ? (
-                <Spinner appearance='subdued' />
-              ) : (
-                'Generate Invoice'
-              )}
-            </Button>
+            {downloadUrl ? (
+              <Button kind='secondary' to={downloadUrl}>
+                Click to Download
+              </Button>
+            ) : (
+              <Button
+                kind='primary'
+                disabled={isSubmitting}
+                accessibilityRole='submit'>
+                {isSubmitting ? (
+                  <Spinner appearance='subdued' />
+                ) : (
+                  'Generate Invoice'
+                )}
+              </Button>
+            )}
 
             {success && (
               <Banner
