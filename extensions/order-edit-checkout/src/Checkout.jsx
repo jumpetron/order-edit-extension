@@ -393,39 +393,44 @@ function Extension() {
       ) : (
         refundData &&
         Object.keys(refundData).length > 0 && (
-          <BlockStack
-            background='base'
-            padding={['base', 'base', 'base', 'base']}
-            cornerRadius='large'
-            border='base'>
-            <InlineLayout spacing='0' columns={['fill', '40%']}>
-              <BlockStack spacing='0'>
-                <InlineStack spacing='extraTight' blockAlignment='baseline'>
-                  <Text size='large' emphasis='bold'>
-                    {formatCurrency(
-                      refundData?.refund?.currencyCode,
-                      refundData?.refund?.amount
-                    )}
+          <Card background='base'>
+            <BlockStack
+              background='base'
+              padding={['base', 'base', 'base', 'base']}
+              cornerRadius='large'
+              border='base'>
+              <InlineLayout spacing='0' columns={['fill', '40%']}>
+                <BlockStack spacing='0'>
+                  <InlineStack spacing='extraTight' blockAlignment='baseline'>
+                    <Text size='large' emphasis='bold'>
+                      {formatCurrency(
+                        refundData?.refund?.currencyCode,
+                        refundData?.refund?.amount
+                      )}
+                    </Text>
+                    <Text
+                      size='extraSmall'
+                      emphasis='bold'
+                      appearance='subdued'>
+                      {refundData?.refund?.currencyCode}
+                    </Text>
+                  </InlineStack>
+                  <Text size='medium' emphasis='bold' appearance='subdued'>
+                    Refund owed
                   </Text>
-                  <Text size='extraSmall' emphasis='bold' appearance='subdued'>
-                    {refundData?.refund?.currencyCode}
-                  </Text>
-                </InlineStack>
-                <Text size='medium' emphasis='bold' appearance='subdued'>
-                  Refund owed
-                </Text>
-              </BlockStack>
-              <Button
-                disabled={createRefundLoading}
-                appearance='monochrome'
-                onPress={createRefund}>
-                {createRefundLoading ? <Spinner /> : 'Accept refund'}
-              </Button>
-            </InlineLayout>
-            <TextBlock appearance='subdued' emphasis='bold'>
-              {refundData?.summary}
-            </TextBlock>
-          </BlockStack>
+                </BlockStack>
+                <Button
+                  disabled={createRefundLoading}
+                  appearance='monochrome'
+                  onPress={createRefund}>
+                  {createRefundLoading ? <Spinner /> : 'Accept refund'}
+                </Button>
+              </InlineLayout>
+              <TextBlock appearance='subdued' emphasis='bold'>
+                {refundData?.summary}
+              </TextBlock>
+            </BlockStack>
+          </Card>
         )
       )}
       {orderSummeryData &&
@@ -437,179 +442,63 @@ function Extension() {
             ))}
           </BlockStack>
         ) : (
-          <BlockStack
-            background='base'
-            padding={['base', 'base', 'base', 'base']}
-            cornerRadius='large'
-            border='base'>
-            <BlockStack>
-              {undoError && (
-                <Banner status='critical' title={`Error: ${undoError}`} />
-              )}
-              <BlockStack spacing='base'>
-                <InlineLayout spacing='0' columns={['fill', '30%']}>
-                  <BlockStack spacing='0'>
-                    <InlineStack spacing='extraTight' blockAlignment='baseline'>
-                      <Text size='large' emphasis='bold'>
-                        {formatCurrency(
-                          orderSummeryData?.orders?.edges[0]?.node
-                            ?.totalOutstandingSet?.presentmentMoney
-                            ?.currencyCode,
-                          orderSummeryData?.orders?.edges[0]?.node
-                            ?.totalOutstandingSet?.presentmentMoney?.amount
-                        )}
+          <Card background='base'>
+            <BlockStack
+              background='base'
+              padding={['base', 'base', 'base', 'base']}
+              cornerRadius='large'
+              border='base'>
+              <BlockStack>
+                {undoError && (
+                  <Banner status='critical' title={`Error: ${undoError}`} />
+                )}
+                <BlockStack spacing='base'>
+                  <InlineLayout spacing='0' columns={['fill', '30%']}>
+                    <BlockStack spacing='0'>
+                      <InlineStack
+                        spacing='extraTight'
+                        blockAlignment='baseline'>
+                        <Text size='large' emphasis='bold'>
+                          {formatCurrency(
+                            orderSummeryData?.orders?.edges[0]?.node
+                              ?.totalOutstandingSet?.presentmentMoney
+                              ?.currencyCode,
+                            orderSummeryData?.orders?.edges[0]?.node
+                              ?.totalOutstandingSet?.presentmentMoney?.amount
+                          )}
+                        </Text>
+                        <Text
+                          size='extraSmall'
+                          emphasis='bold'
+                          appearance='subdued'>
+                          {
+                            orderSummeryData?.orders?.edges[0]?.node
+                              ?.totalOutstandingSet?.presentmentMoney
+                              ?.currencyCode
+                          }
+                        </Text>
+                      </InlineStack>
+                      <Text size='medium' emphasis='bold' appearance='subdued'>
+                        Payment due
                       </Text>
-                      <Text
-                        size='extraSmall'
-                        emphasis='bold'
-                        appearance='subdued'>
-                        {
-                          orderSummeryData?.orders?.edges[0]?.node
-                            ?.totalOutstandingSet?.presentmentMoney
-                            ?.currencyCode
-                        }
-                      </Text>
-                    </InlineStack>
-                    <Text size='medium' emphasis='bold' appearance='subdued'>
-                      Payment due
-                    </Text>
-                  </BlockStack>
-                  <Button
-                    appearance='monochrome'
-                    onPress={handleUndo}
-                    disabled={undoLoading}>
-                    {undoLoading ? <Spinner /> : 'Undo'}
-                  </Button>
-                </InlineLayout>
-                <TextBlock appearance='subdued' emphasis='bold'>
-                  You have a remaining balance left to pay on your order. If you
-                  don't pay before the editing deadline, we'll reverse your
-                  edits.
-                </TextBlock>
-              </BlockStack>
-              <Divider />
-              <BlockStack padding='base' spacing='base'>
-                {orderSummeryData?.orders?.edges[0]?.node?.lineItems?.edges
-                  ?.filter((item) => item?.node?.currentQuantity > 0) // Filter out items with quantity 0
-                  ?.map((item) => {
-                    const unitPrice =
-                      item?.node?.discountedUnitPriceAfterAllDiscountsSet
-                        ?.shopMoney?.amount
-                    const currencyCode =
-                      item?.node?.discountedUnitPriceAfterAllDiscountsSet
-                        ?.shopMoney?.currencyCode
-                    const totalPrice = unitPrice * item?.node?.currentQuantity
-
-                    return (
-                      <InlineLayout
-                        key={item.node?.id}
-                        blockAlignment='center'
-                        spacing='base'
-                        columns={['fill', '30%']}>
-                        <InlineLayout columns={['auto', 'fill']} spacing='base'>
-                          <ProductThumbnail
-                            size='base'
-                            source={item?.node?.image?.url}
-                            badge={item?.node?.currentQuantity}
-                          />
-                          <BlockStack spacing='none'>
-                            <Text size='base' emphasis='bold'>
-                              {item?.node?.title}
-                            </Text>
-                            <Text size='small'>{item?.node?.variantTitle}</Text>
-                            <Text size='small'>
-                              {formatCurrency(
-                                item?.node
-                                  ?.discountedUnitPriceAfterAllDiscountsSet
-                                  ?.shopMoney?.currencyCode,
-                                item?.node
-                                  ?.discountedUnitPriceAfterAllDiscountsSet
-                                  ?.shopMoney?.amount
-                              )}{' '}
-                              x {item?.node?.currentQuantity}
-                            </Text>
-                          </BlockStack>
-                        </InlineLayout>
-                        <BlockStack spacing='0' inlineAlignment='end'>
-                          <Text>
-                            {formatCurrency(currencyCode, totalPrice)}
-                          </Text>
-                          <Link
-                            overlay={
-                              <Modal id='remove-modal' padding>
-                                <BlockStack spacing='base'>
-                                  <InlineStack inlineAlignment='center'>
-                                    <Text size='large'>Are you sure?</Text>
-                                  </InlineStack>
-                                  <Banner
-                                    status='critical'
-                                    title='Are you sure you want to remove this product
-                                from your order? This action cannot be undone.'
-                                  />
-                                  <InlineLayout
-                                    columns={['fill', 'fill']}
-                                    spacing='base'>
-                                    <Button
-                                      disabled={removing[item.node.id]}
-                                      onPress={() =>
-                                        handleRemoveProduct(item.node.id)
-                                      }>
-                                      {removing[item.node.id] ? (
-                                        <Spinner appearance='subdued' />
-                                      ) : (
-                                        'Yes'
-                                      )}
-                                    </Button>
-                                    <Button
-                                      onPress={() =>
-                                        ui.overlay.close('remove-modal')
-                                      }>
-                                      Close
-                                    </Button>
-                                  </InlineLayout>
-                                </BlockStack>
-                              </Modal>
-                            }
-                            disabled={removing[item.node.id]}>
-                            {removing[item.node.id] ? (
-                              <Spinner appearance='subdued' />
-                            ) : (
-                              'Remove'
-                            )}
-                          </Link>
-                        </BlockStack>
-                      </InlineLayout>
-                    )
-                  })}
-              </BlockStack>
-
-              <Disclosure onToggle={(open) => handleDisclosure(open)}>
-                <Pressable toggles={'sub_total'}>
-                  <InlineLayout
-                    columns={['fill', 'auto']}
-                    spacing='base'
-                    blockAlignment='center'>
-                    <InlineLayout columns={['fill', 'auto']}>
-                      <Text>Subtotal</Text>
-                      <Text>
-                        {
-                          orderSummeryData?.orders?.edges[0]?.node
-                            ?.currentSubtotalPriceSet?.presentmentMoney
-                            ?.currencyCode
-                        }{' '}
-                        {
-                          orderSummeryData?.orders?.edges[0]?.node
-                            ?.currentSubtotalPriceSet?.presentmentMoney?.amount
-                        }
-                      </Text>
-                    </InlineLayout>
-                    <Icon source='chevronDown' size='small' />
+                    </BlockStack>
+                    <Button
+                      appearance='monochrome'
+                      onPress={handleUndo}
+                      disabled={undoLoading}>
+                      {undoLoading ? <Spinner /> : 'Undo'}
+                    </Button>
                   </InlineLayout>
-                </Pressable>
-
-                <BlockStack spacing='extraTight' id='sub_total'>
+                  <TextBlock appearance='subdued' emphasis='bold'>
+                    You have a remaining balance left to pay on your order. If
+                    you don't pay before the editing deadline, we'll reverse
+                    your edits.
+                  </TextBlock>
+                </BlockStack>
+                <Divider />
+                <BlockStack padding='base' spacing='base'>
                   {orderSummeryData?.orders?.edges[0]?.node?.lineItems?.edges
-                    ?.filter((item) => item?.node?.currentQuantity > 0)
+                    ?.filter((item) => item?.node?.currentQuantity > 0) // Filter out items with quantity 0
                     ?.map((item) => {
                       const unitPrice =
                         item?.node?.discountedUnitPriceAfterAllDiscountsSet
@@ -618,55 +507,112 @@ function Extension() {
                         item?.node?.discountedUnitPriceAfterAllDiscountsSet
                           ?.shopMoney?.currencyCode
                       const totalPrice = unitPrice * item?.node?.currentQuantity
+
                       return (
                         <InlineLayout
-                          spacing='base'
                           key={item.node?.id}
-                          columns={['fill', 'auto']}>
-                          <BlockStack spacing='0'>
-                            <Text size='small' appearance='subdued'>
-                              {item?.node?.currentQuantity}x {item?.node?.title}
+                          blockAlignment='center'
+                          spacing='base'
+                          columns={['fill', '30%']}>
+                          <InlineLayout
+                            columns={['auto', 'fill']}
+                            spacing='base'>
+                            <ProductThumbnail
+                              size='base'
+                              source={item?.node?.image?.url}
+                              badge={item?.node?.currentQuantity}
+                            />
+                            <BlockStack spacing='none'>
+                              <Text size='base' emphasis='bold'>
+                                {item?.node?.title}
+                              </Text>
+                              <Text size='small'>
+                                {item?.node?.variantTitle}
+                              </Text>
+                              <Text size='small'>
+                                {formatCurrency(
+                                  item?.node
+                                    ?.discountedUnitPriceAfterAllDiscountsSet
+                                    ?.shopMoney?.currencyCode,
+                                  item?.node
+                                    ?.discountedUnitPriceAfterAllDiscountsSet
+                                    ?.shopMoney?.amount
+                                )}{' '}
+                                x {item?.node?.currentQuantity}
+                              </Text>
+                            </BlockStack>
+                          </InlineLayout>
+                          <BlockStack spacing='0' inlineAlignment='end'>
+                            <Text>
+                              {formatCurrency(currencyCode, totalPrice)}
                             </Text>
-                            <Text size='small' appearance='subdued'>
-                              {item?.node?.variantTitle}
-                            </Text>
+                            <Link
+                              overlay={
+                                <Modal id='remove-modal' padding>
+                                  <BlockStack spacing='base'>
+                                    <InlineStack inlineAlignment='center'>
+                                      <Text size='large'>Are you sure?</Text>
+                                    </InlineStack>
+                                    <Banner
+                                      status='critical'
+                                      title='Are you sure you want to remove this product
+                                from your order? This action cannot be undone.'
+                                    />
+                                    <InlineLayout
+                                      columns={['fill', 'fill']}
+                                      spacing='base'>
+                                      <Button
+                                        disabled={removing[item.node.id]}
+                                        onPress={() =>
+                                          handleRemoveProduct(item.node.id)
+                                        }>
+                                        {removing[item.node.id] ? (
+                                          <Spinner appearance='subdued' />
+                                        ) : (
+                                          'Yes'
+                                        )}
+                                      </Button>
+                                      <Button
+                                        onPress={() =>
+                                          ui.overlay.close('remove-modal')
+                                        }>
+                                        Close
+                                      </Button>
+                                    </InlineLayout>
+                                  </BlockStack>
+                                </Modal>
+                              }
+                              disabled={removing[item.node.id]}>
+                              {removing[item.node.id] ? (
+                                <Spinner appearance='subdued' />
+                              ) : (
+                                'Remove'
+                              )}
+                            </Link>
                           </BlockStack>
-                          <Text size='small' appearance='subdued'>
-                            {formatCurrency(currencyCode, totalPrice)}
-                          </Text>
                         </InlineLayout>
                       )
                     })}
                 </BlockStack>
-              </Disclosure>
-              {orderSummeryData?.orders?.edges[0]?.node?.shippingLines?.nodes
-                ?.length === 0 ? (
-                <InlineLayout
-                  columns={['fill', 'auto']}
-                  spacing='base'
-                  blockAlignment='center'>
-                  <Text>Shipping</Text>
-                  <Text>Free</Text>
-                </InlineLayout>
-              ) : (
+
                 <Disclosure onToggle={(open) => handleDisclosure(open)}>
-                  <Pressable toggles={'shipping_method'}>
+                  <Pressable toggles={'sub_total'}>
                     <InlineLayout
                       columns={['fill', 'auto']}
                       spacing='base'
                       blockAlignment='center'>
                       <InlineLayout columns={['fill', 'auto']}>
-                        <Text>Shipping</Text>
+                        <Text>Subtotal</Text>
                         <Text>
                           {
                             orderSummeryData?.orders?.edges[0]?.node
-                              ?.shippingLines?.nodes[0]?.originalPriceSet
-                              ?.presentmentMoney?.currencyCode
+                              ?.currentSubtotalPriceSet?.presentmentMoney
+                              ?.currencyCode
                           }{' '}
                           {
                             orderSummeryData?.orders?.edges[0]?.node
-                              ?.shippingLines?.nodes[0]?.originalPriceSet
-                              ?.presentmentMoney?.amount
+                              ?.currentSubtotalPriceSet?.presentmentMoney
+                              ?.amount
                           }
                         </Text>
                       </InlineLayout>
@@ -674,232 +620,306 @@ function Extension() {
                     </InlineLayout>
                   </Pressable>
 
-                  <BlockStack spacing='extraTight' id='shipping_method'>
-                    <ChoiceList
-                      name={
-                        orderSummeryData?.orders?.edges[0]?.node?.shippingLines
-                          ?.nodes[0].title
-                      }
-                      variant='group'
-                      value={
-                        orderSummeryData?.orders?.edges[0]?.node?.shippingLines
-                          ?.nodes[0].title
-                      }>
-                      <Choice
-                        id={
-                          orderSummeryData?.orders?.edges[0]?.node
-                            ?.shippingLines?.nodes[0].title
-                        }
-                        secondaryContent={formatCurrency(
-                          orderSummeryData?.orders?.edges[0]?.node
-                            ?.shippingLines?.nodes[0]?.originalPriceSet
-                            ?.presentmentMoney?.currencyCode,
-                          orderSummeryData?.orders?.edges[0]?.node
-                            ?.shippingLines?.nodes[0]?.originalPriceSet
-                            ?.presentmentMoney?.amount
-                        )}>
-                        {
-                          orderSummeryData?.orders?.edges[0]?.node
-                            ?.shippingLines?.nodes[0].title
-                        }
-                      </Choice>
-                    </ChoiceList>
+                  <BlockStack spacing='extraTight' id='sub_total'>
+                    {orderSummeryData?.orders?.edges[0]?.node?.lineItems?.edges
+                      ?.filter((item) => item?.node?.currentQuantity > 0)
+                      ?.map((item) => {
+                        const unitPrice =
+                          item?.node?.discountedUnitPriceAfterAllDiscountsSet
+                            ?.shopMoney?.amount
+                        const currencyCode =
+                          item?.node?.discountedUnitPriceAfterAllDiscountsSet
+                            ?.shopMoney?.currencyCode
+                        const totalPrice =
+                          unitPrice * item?.node?.currentQuantity
+                        return (
+                          <InlineLayout
+                            spacing='base'
+                            key={item.node?.id}
+                            columns={['fill', 'auto']}>
+                            <BlockStack spacing='0'>
+                              <Text size='small' appearance='subdued'>
+                                {item?.node?.currentQuantity}x{' '}
+                                {item?.node?.title}
+                              </Text>
+                              <Text size='small' appearance='subdued'>
+                                {item?.node?.variantTitle}
+                              </Text>
+                            </BlockStack>
+                            <Text size='small' appearance='subdued'>
+                              {formatCurrency(currencyCode, totalPrice)}
+                            </Text>
+                          </InlineLayout>
+                        )
+                      })}
                   </BlockStack>
                 </Disclosure>
-              )}
-              <InlineLayout columns={['fill', 'auto']}>
-                <Text>Taxes</Text>
-                <Text>
-                  {
-                    orderSummeryData?.orders?.edges[0]?.node?.totalTaxSet
-                      ?.presentmentMoney?.currencyCode
-                  }{' '}
-                  {
-                    orderSummeryData?.orders?.edges[0]?.node?.totalTaxSet
-                      ?.presentmentMoney?.amount
-                  }
-                </Text>
-              </InlineLayout>
-              <InlineLayout columns={['fill', 'auto']}>
-                <Text>Total</Text>
-                <Text>
-                  {
-                    orderSummeryData?.orders?.edges[0]?.node
-                      ?.currentTotalPriceSet?.presentmentMoney?.currencyCode
-                  }{' '}
-                  {
-                    orderSummeryData?.orders?.edges[0]?.node
-                      ?.currentTotalPriceSet?.presentmentMoney?.amount
-                  }
-                </Text>
-              </InlineLayout>
-              <InlineLayout columns={['fill', 'auto']}>
-                <Text>Paid</Text>
-                <Text>
-                  {
-                    orderSummeryData?.orders?.edges[0]?.node
-                      ?.originalTotalPriceSet?.presentmentMoney?.currencyCode
-                  }{' '}
-                  {
-                    orderSummeryData?.orders?.edges[0]?.node
-                      ?.originalTotalPriceSet?.presentmentMoney?.amount
-                  }
-                </Text>
-              </InlineLayout>
-            </BlockStack>
-          </BlockStack>
-        ))}
-      <BlockStack
-        cornerRadius='large'
-        border={'base'}
-        padding={['base', 'base', 'base', 'base']}>
-        <BlockStack spacing='none'>
-          <BlockStack padding={['base', 'base', 'base', 'base']}>
-            <InlineLayout columns={['fill', 'auto']}>
-              <Heading level={1}>Edit Order</Heading>
-              {loading || timeRemaining === null ? (
-                <SkeletonText />
-              ) : (
-                <Text>Deadline: {timeRemaining}</Text>
-              )}
-            </InlineLayout>
-            <Divider />
-          </BlockStack>
-          {loading ? (
-            <BlockStack spacing={'base'}>
-              {Array.from({ length: 5 }).map((_, i) => (
-                <SkeletonTextBlock key={i} size='extraLarge' />
-              ))}
-            </BlockStack>
-          ) : (
-            settings?.data?.menus?.map((option) => (
-              <Disclosure
-                key={option?.id}
-                onToggle={(open) => handleDisclosure(open)}>
-                <Pressable
-                  toggles={option?.slug}
-                  padding='base'
-                  onPress={() => handleDefaultData(option?.slug)}>
+                {orderSummeryData?.orders?.edges[0]?.node?.shippingLines?.nodes
+                  ?.length === 0 ? (
                   <InlineLayout
-                    blockAlignment='center'
+                    columns={['fill', 'auto']}
                     spacing='base'
-                    columns={['auto', 'fill', 'auto']}>
-                    <Icon source={option.icon} appearance='monochrome' />
-                    <Heading>{option.name}</Heading>
-                    <Icon
-                      source={openId.includes(option?.slug) ? 'minus' : 'plus'}
-                      appearance='monochrome'
-                    />
+                    blockAlignment='center'>
+                    <Text>Shipping</Text>
+                    <Text>Free</Text>
                   </InlineLayout>
-                </Pressable>
-                {option?.slug == 'shipping_address' && (
-                  <ShippingAddress
-                    shopUrl={shopUrl}
-                    order_id={order_id}
-                    defaultData={defaultData['shipping_address']}
-                    isLoading={loadingState['shipping_address']}
-                    optionName={option?.slug}
-                  />
+                ) : (
+                  <Disclosure onToggle={(open) => handleDisclosure(open)}>
+                    <Pressable toggles={'shipping_method'}>
+                      <InlineLayout
+                        columns={['fill', 'auto']}
+                        spacing='base'
+                        blockAlignment='center'>
+                        <InlineLayout columns={['fill', 'auto']}>
+                          <Text>Shipping</Text>
+                          <Text>
+                            {
+                              orderSummeryData?.orders?.edges[0]?.node
+                                ?.shippingLines?.nodes[0]?.originalPriceSet
+                                ?.presentmentMoney?.currencyCode
+                            }{' '}
+                            {
+                              orderSummeryData?.orders?.edges[0]?.node
+                                ?.shippingLines?.nodes[0]?.originalPriceSet
+                                ?.presentmentMoney?.amount
+                            }
+                          </Text>
+                        </InlineLayout>
+                        <Icon source='chevronDown' size='small' />
+                      </InlineLayout>
+                    </Pressable>
+
+                    <BlockStack spacing='extraTight' id='shipping_method'>
+                      <ChoiceList
+                        name={
+                          orderSummeryData?.orders?.edges[0]?.node
+                            ?.shippingLines?.nodes[0].title
+                        }
+                        variant='group'
+                        value={
+                          orderSummeryData?.orders?.edges[0]?.node
+                            ?.shippingLines?.nodes[0].title
+                        }>
+                        <Choice
+                          id={
+                            orderSummeryData?.orders?.edges[0]?.node
+                              ?.shippingLines?.nodes[0].title
+                          }
+                          secondaryContent={formatCurrency(
+                            orderSummeryData?.orders?.edges[0]?.node
+                              ?.shippingLines?.nodes[0]?.originalPriceSet
+                              ?.presentmentMoney?.currencyCode,
+                            orderSummeryData?.orders?.edges[0]?.node
+                              ?.shippingLines?.nodes[0]?.originalPriceSet
+                              ?.presentmentMoney?.amount
+                          )}>
+                          {
+                            orderSummeryData?.orders?.edges[0]?.node
+                              ?.shippingLines?.nodes[0].title
+                          }
+                        </Choice>
+                      </ChoiceList>
+                    </BlockStack>
+                  </Disclosure>
                 )}
-                {option?.slug == 'change_contact_info' && (
-                  <ContactInformation
-                    shopUrl={shopUrl}
-                    order_id={order_id}
-                    defaultData={defaultData['change_contact_info']}
-                    isLoading={loadingState['change_contact_info']}
-                    optionName={option?.slug}
-                  />
+                <InlineLayout columns={['fill', 'auto']}>
+                  <Text>Taxes</Text>
+                  <Text>
+                    {
+                      orderSummeryData?.orders?.edges[0]?.node?.totalTaxSet
+                        ?.presentmentMoney?.currencyCode
+                    }{' '}
+                    {
+                      orderSummeryData?.orders?.edges[0]?.node?.totalTaxSet
+                        ?.presentmentMoney?.amount
+                    }
+                  </Text>
+                </InlineLayout>
+                <InlineLayout columns={['fill', 'auto']}>
+                  <Text>Total</Text>
+                  <Text>
+                    {
+                      orderSummeryData?.orders?.edges[0]?.node
+                        ?.currentTotalPriceSet?.presentmentMoney?.currencyCode
+                    }{' '}
+                    {
+                      orderSummeryData?.orders?.edges[0]?.node
+                        ?.currentTotalPriceSet?.presentmentMoney?.amount
+                    }
+                  </Text>
+                </InlineLayout>
+                <InlineLayout columns={['fill', 'auto']}>
+                  <Text>Paid</Text>
+                  <Text>
+                    {
+                      orderSummeryData?.orders?.edges[0]?.node
+                        ?.originalTotalPriceSet?.presentmentMoney?.currencyCode
+                    }{' '}
+                    {
+                      orderSummeryData?.orders?.edges[0]?.node
+                        ?.originalTotalPriceSet?.presentmentMoney?.amount
+                    }
+                  </Text>
+                </InlineLayout>
+              </BlockStack>
+            </BlockStack>
+          </Card>
+        ))}
+      <Card background='base'>
+        <BlockStack
+          cornerRadius='large'
+          border={'base'}
+          padding={['base', 'base', 'base', 'base']}>
+          <BlockStack spacing='none'>
+            <BlockStack padding={['base', 'base', 'base', 'base']}>
+              <InlineLayout columns={['fill', 'auto']}>
+                <Heading level={1}>Edit Order</Heading>
+                {loading || timeRemaining === null ? (
+                  <SkeletonText />
+                ) : (
+                  <Text>Deadline: {timeRemaining}</Text>
                 )}
-                {option?.slug == 'change_product_quantities' && (
-                  <ChangeProductQuantities
-                    shopUrl={shopUrl}
-                    order_id={order_id}
-                    defaultData={defaultData['change_product_quantities']}
-                    isLoading={loadingState['change_product_quantities']}
-                    optionName={option?.slug}
-                  />
-                )}
-                {option?.slug == 'upgrade_shipping_method' && (
-                  <UpgradeShippingMethod
-                    shopUrl={shopUrl}
-                    order_id={order_id}
-                    defaultData={defaultData['upgrade_shipping_method']}
-                    isLoading={loadingState['upgrade_shipping_method']}
-                    optionName={option?.slug}
-                  />
-                )}
-                {option?.slug == 'request_order_cancel' && (
-                  <CancelOrder
-                    orderName={orderName}
-                    shopUrl={shopUrl}
-                    order_id={order_id}
-                    defaultData={defaultData['request_order_cancel']}
-                    isLoading={loadingState['request_order_cancel']}
-                    optionName={option?.slug}
-                  />
-                )}
-                {option?.slug == 'download_invoice' && (
-                  <DownloadInvoice
-                    shopUrl={shopUrl}
-                    order_id={order_id}
-                    defaultData={defaultData['download_invoice']}
-                    isLoading={loadingState['download_invoice']}
-                    optionName={option?.slug}
-                  />
-                )}
-                {option?.slug == 'edit_gift_message' && (
-                  <EditGiftMessage
-                    shopUrl={shopUrl}
-                    order_id={order_id}
-                    defaultData={defaultData['edit_gift_message']}
-                    isLoading={loadingState['edit_gift_message']}
-                    optionName={option?.slug}
-                  />
-                )}
-                {option?.slug == 'add_another_product' && (
-                  <AddAnotherProduct
-                    handleDefaultData={handleDefaultData}
-                    shopUrl={shopUrl}
-                    order_id={order_id}
-                    allProduct={allProduct['add_another_product']}
-                    defaultData={defaultData['add_another_product']}
-                    isLoading={loadingState['add_another_product']}
-                    optionName={option?.slug}
-                  />
-                )}
-                {option?.slug == 'change_size_variant' && (
-                  <ChangeProductSizeAndVariant
-                    shopUrl={shopUrl}
-                    order_id={order_id}
-                    defaultData={defaultData['change_size_variant']}
-                    isLoading={loadingState['change_size_variant']}
-                    optionName={option?.slug}
-                  />
-                )}
-                {option?.slug == 'switch_product' && (
-                  <SwitchProduct
-                    shopUrl={shopUrl}
-                    order_id={order_id}
-                    defaultData={defaultData['switch_product']}
-                    isLoading={loadingState['switch_product']}
-                    optionName={option?.slug}
-                  />
-                )}
-                {option?.slug == 'contact_customer_support' && (
-                  <ContactCustomerSupport
-                    orderName={orderName}
-                    shopUrl={shopUrl}
-                    order_id={order_id}
-                    defaultData={defaultData['contact_customer_support']}
-                    isLoading={loadingState['contact_customer_support']}
-                    optionName={option?.slug}
-                  />
-                )}
-              </Disclosure>
-            ))
-          )}
+              </InlineLayout>
+              <Divider />
+            </BlockStack>
+            {loading ? (
+              <BlockStack spacing={'base'}>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <SkeletonTextBlock key={i} size='extraLarge' />
+                ))}
+              </BlockStack>
+            ) : (
+              settings?.data?.menus?.map((option) => (
+                <Disclosure
+                  key={option?.id}
+                  onToggle={(open) => handleDisclosure(open)}>
+                  <Pressable
+                    toggles={option?.slug}
+                    padding='base'
+                    onPress={() => handleDefaultData(option?.slug)}>
+                    <InlineLayout
+                      blockAlignment='center'
+                      spacing='base'
+                      columns={['auto', 'fill', 'auto']}>
+                      <Icon source={option.icon} appearance='monochrome' />
+                      <Heading>{option.name}</Heading>
+                      <Icon
+                        source={
+                          openId.includes(option?.slug) ? 'minus' : 'plus'
+                        }
+                        appearance='monochrome'
+                      />
+                    </InlineLayout>
+                  </Pressable>
+                  {option?.slug == 'shipping_address' && (
+                    <ShippingAddress
+                      shopUrl={shopUrl}
+                      order_id={order_id}
+                      defaultData={defaultData['shipping_address']}
+                      isLoading={loadingState['shipping_address']}
+                      optionName={option?.slug}
+                    />
+                  )}
+                  {option?.slug == 'change_contact_info' && (
+                    <ContactInformation
+                      shopUrl={shopUrl}
+                      order_id={order_id}
+                      defaultData={defaultData['change_contact_info']}
+                      isLoading={loadingState['change_contact_info']}
+                      optionName={option?.slug}
+                    />
+                  )}
+                  {option?.slug == 'change_product_quantities' && (
+                    <ChangeProductQuantities
+                      shopUrl={shopUrl}
+                      order_id={order_id}
+                      defaultData={defaultData['change_product_quantities']}
+                      isLoading={loadingState['change_product_quantities']}
+                      optionName={option?.slug}
+                    />
+                  )}
+                  {option?.slug == 'upgrade_shipping_method' && (
+                    <UpgradeShippingMethod
+                      shopUrl={shopUrl}
+                      order_id={order_id}
+                      defaultData={defaultData['upgrade_shipping_method']}
+                      isLoading={loadingState['upgrade_shipping_method']}
+                      optionName={option?.slug}
+                    />
+                  )}
+                  {option?.slug == 'request_order_cancel' && (
+                    <CancelOrder
+                      orderName={orderName}
+                      shopUrl={shopUrl}
+                      order_id={order_id}
+                      defaultData={defaultData['request_order_cancel']}
+                      isLoading={loadingState['request_order_cancel']}
+                      optionName={option?.slug}
+                    />
+                  )}
+                  {option?.slug == 'download_invoice' && (
+                    <DownloadInvoice
+                      shopUrl={shopUrl}
+                      order_id={order_id}
+                      defaultData={defaultData['download_invoice']}
+                      isLoading={loadingState['download_invoice']}
+                      optionName={option?.slug}
+                    />
+                  )}
+                  {option?.slug == 'edit_gift_message' && (
+                    <EditGiftMessage
+                      shopUrl={shopUrl}
+                      order_id={order_id}
+                      defaultData={defaultData['edit_gift_message']}
+                      isLoading={loadingState['edit_gift_message']}
+                      optionName={option?.slug}
+                    />
+                  )}
+                  {option?.slug == 'add_another_product' && (
+                    <AddAnotherProduct
+                      handleDefaultData={handleDefaultData}
+                      shopUrl={shopUrl}
+                      order_id={order_id}
+                      allProduct={allProduct['add_another_product']}
+                      defaultData={defaultData['add_another_product']}
+                      isLoading={loadingState['add_another_product']}
+                      optionName={option?.slug}
+                    />
+                  )}
+                  {option?.slug == 'change_size_variant' && (
+                    <ChangeProductSizeAndVariant
+                      shopUrl={shopUrl}
+                      order_id={order_id}
+                      defaultData={defaultData['change_size_variant']}
+                      isLoading={loadingState['change_size_variant']}
+                      optionName={option?.slug}
+                    />
+                  )}
+                  {option?.slug == 'switch_product' && (
+                    <SwitchProduct
+                      shopUrl={shopUrl}
+                      order_id={order_id}
+                      defaultData={defaultData['switch_product']}
+                      isLoading={loadingState['switch_product']}
+                      optionName={option?.slug}
+                    />
+                  )}
+                  {option?.slug == 'contact_customer_support' && (
+                    <ContactCustomerSupport
+                      orderName={orderName}
+                      shopUrl={shopUrl}
+                      order_id={order_id}
+                      defaultData={defaultData['contact_customer_support']}
+                      isLoading={loadingState['contact_customer_support']}
+                      optionName={option?.slug}
+                    />
+                  )}
+                </Disclosure>
+              ))
+            )}
+          </BlockStack>
         </BlockStack>
-      </BlockStack>
+      </Card>
     </BlockStack>
   )
 }
@@ -1607,8 +1627,9 @@ const ChangeProductQuantities = ({
                 <ProductThumbnail
                   size='base'
                   source={item?.node?.image?.url}
-                  badge={item?.node?.currentQuantity}
+                  badge={quantities[item.node.id] ?? item.node?.currentQuantity}
                 />
+
                 <BlockStack spacing='none'>
                   <Text size='base' emphasis='bold'>
                     {item?.node?.title}
@@ -1895,8 +1916,8 @@ const CancelOrder = ({
     shop_url: ''
   })
 
-  const isOnHold = defaultData?.data?.fufillmentOrder?.nodes?.some(
-    (item) => item.status === 'ON_HOLD'
+  const isCancelDisable = defaultData?.data?.fufillmentOrder?.some((item) =>
+    ['ON_HOLD', 'CLOSED'].includes(item?.node?.status)
   )
 
   const handleInputChange = (field, value) => {
@@ -1936,7 +1957,8 @@ const CancelOrder = ({
           body: JSON.stringify(formData)
         }
       )
-
+      const result = await response.json()
+      console.log(result)
       if (response.ok) {
         setSubmitSuccess(true)
         setButtonText('Order Canceled')
@@ -1956,17 +1978,27 @@ const CancelOrder = ({
 
   useEffect(() => {
     if (!isLoading) {
+      const fulfillmentIds = defaultData?.data?.fufillmentOrder
+        ?.filter((item) => item?.node?.status === 'OPEN') // Get only OPEN orders
+        ?.map((item) => item?.node?.id) // Extract the IDs
+
+      // Join IDs into a single string if there are multiple OPEN orders
+      const fulfillment_id = fulfillmentIds?.length
+        ? fulfillmentIds.join(',')
+        : ''
+
       setFormData({
         cancelReason: cancelReason[0]?.value || '',
         reasonDescription: '',
-        fulfillment_id:
-          defaultData?.data?.fufillmentOrder?.edges[0]?.node?.id || '',
+        fulfillment_id: fulfillment_id, // Use the correct fulfillment ID format
         order_name: sanitizedOrderName,
         order_id: order_id,
         shop_url: shopUrl
       })
     }
   }, [defaultData, isLoading])
+
+  console.log(defaultData)
   return (
     <View id={optionName} padding={['none', 'base', 'base', 'base']}>
       <BlockStack>
@@ -2009,10 +2041,10 @@ const CancelOrder = ({
               <Button
                 kind='primary'
                 accessibilityRole='submit'
-                disabled={isSubmitting || isOnHold}>
+                disabled={isSubmitting || isCancelDisable}>
                 {isSubmitting ? <Spinner appearance='subdued' /> : buttonText}
               </Button>
-              {isOnHold && (
+              {isCancelDisable && (
                 <Banner
                   status='warning'
                   title='Order cancellation is not allowed because one or more items have pending payment.'
@@ -2118,6 +2150,7 @@ const EditGiftMessage = ({
         <Form onSubmit={handleSubmit}>
           <BlockStack>
             <TextField
+              maxLength={100}
               label='Type your message'
               multiline={3}
               value={giftMessage?.gift_message}
